@@ -7,7 +7,7 @@ function Login({ toggleForm }) {
       <div id="formContent">
         <h2 className="active"> Giriş Yap </h2>
         <h2 className="inactive underlineHover" onClick={toggleForm} style={{cursor: 'pointer'}}>
-          Kayıt Olma Ekranı
+          Kayıt Ol
         </h2>   
 
         <form>
