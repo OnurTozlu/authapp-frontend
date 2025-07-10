@@ -6,11 +6,22 @@ function Register({ toggleForm }) {
     kullaniciAdi: '',
     sifre: '',
     isim: '',
-    soyisim: ''
+    soyisim: '',
+    numara: '',
+    mail: ''
   });
 
   const handleChange = e => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+
+    // Sadece numara alanı için rakam kontrolü
+    if (name === 'numara') {
+      if (/^\d*$/.test(value) && value.length <= 10) {
+        setFormData({ ...formData, [name]: value });
+      }
+    } else {
+      setFormData({ ...formData, [name]: value });
+    }
   };
 
   const handleSubmit = async e => {
@@ -29,7 +40,7 @@ function Register({ toggleForm }) {
 
       const result = await response.json();
       alert('Kayıt başarılı: ' + result.kullaniciAdi);
-      toggleForm('login'); // ✅ Kayıt başarılıysa login ekranına geç
+      toggleForm('login');
     } catch (err) {
       alert('Hata: ' + err.message);
     }
@@ -38,7 +49,7 @@ function Register({ toggleForm }) {
   return (
     <div className="wrapper fadeInDown">
       <div id="formContent">
-        <h2 className="inactive underlineHover" onClick={() => toggleForm('login')} style={{cursor: 'pointer'}}> Giriş Yap </h2>
+        <h2 className="inactive underlineHover" onClick={() => toggleForm('login')} style={{ cursor: 'pointer' }}> Giriş Yap </h2>
         <h2 className="active">Kayıt Ol</h2>
 
         <form onSubmit={handleSubmit}>
@@ -64,6 +75,22 @@ function Register({ toggleForm }) {
             className="fadeIn second"
             placeholder="Soyisim"
             value={formData.soyisim}
+            onChange={handleChange}
+          />
+          <input
+            type="text"
+            name="mail"
+            className="fadeIn second"
+            placeholder="E-Posta"
+            value={formData.mail}
+            onChange={handleChange}
+          />
+          <input
+            type="tel"
+            name="numara"
+            className="fadeIn second"
+            placeholder="Telefon Numarası"
+            value={formData.numara}
             onChange={handleChange}
           />
           <input
