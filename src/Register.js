@@ -1,44 +1,78 @@
-import React from 'react';
 import './Register.css';
+import React, { useState } from 'react';
 
 function Register({ toggleForm }) {
+  const [formData, setFormData] = useState({
+    kullaniciAdi: '',
+    sifre: '',
+    isim: '',
+    soyisim: ''
+  });
+
+  const handleChange = e => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = async e => {
+    e.preventDefault();
+    try {
+      const response = await fetch('http://localhost:8080/api/kullanici/kayit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error);
+      }
+
+      const result = await response.json();
+      alert('Kayıt başarılı: ' + result.kullaniciAdi);
+      toggleForm('login'); // ✅ Kayıt başarılıysa login ekranına geç
+    } catch (err) {
+      alert('Hata: ' + err.message);
+    }
+  };
+
   return (
     <div className="wrapper fadeInDown">
       <div id="formContent">
-        <h2 className="inactive underlineHover" onClick={toggleForm} style={{cursor: 'pointer'}}> Giriş Yap </h2>
-        <h2 className="active">
-          Kayıt Ol
-        </h2>
+        <h2 className="inactive underlineHover" onClick={() => toggleForm('login')} style={{cursor: 'pointer'}}> Giriş Yap </h2>
+        <h2 className="active">Kayıt Ol</h2>
 
-
-        <form>
+        <form onSubmit={handleSubmit}>
           <input
             type="text"
-            id="login"
+            name="kullaniciAdi"
             className="fadeIn second"
-            name="login"
             placeholder="Kullanıcı Adı"
+            value={formData.kullaniciAdi}
+            onChange={handleChange}
           />
           <input
             type="text"
-            id="login"
+            name="isim"
             className="fadeIn second"
-            name="login"
             placeholder="İsim"
+            value={formData.isim}
+            onChange={handleChange}
           />
           <input
             type="text"
-            id="login"
+            name="soyisim"
             className="fadeIn second"
-            name="login"
             placeholder="Soyisim"
+            value={formData.soyisim}
+            onChange={handleChange}
           />
           <input
             type="password"
-            id="password"
+            name="sifre"
             className="fadeIn third"
-            name="password"
             placeholder="Şifre"
+            value={formData.sifre}
+            onChange={handleChange}
           />
           <input
             type="submit"

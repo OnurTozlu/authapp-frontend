@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import Register from './Register';
 import Login from './Login';
+import Register from './Register';
 
 function App() {
   const [currentForm, setCurrentForm] = useState('login');
 
-  const toggleForm = () => {
-    setCurrentForm(currentForm === 'login' ? 'register' : 'login');
+  const toggleForm = (formName) => {
+    setCurrentForm(formName);
   };
 
   return (
