@@ -86,7 +86,7 @@ input[type=button], input[type=submit], input[type=reset]  {
   font-size: 13px;
   box-shadow: 0 10px 30px 0 rgba(114,137,218,0.6);
   border-radius: 5px;
-  margin: 5px 20px 40px 20px;
+  margin: 25px 20px 40px 20px;
   transition: all 0.3s ease-in-out;
   cursor: pointer;
 }
@@ -100,6 +100,7 @@ input[type=button]:active, input[type=submit]:active, input[type=reset]:active  
 }
 
 input[type=password],
+input[type=email],
 input[type=text],
 input[type=tel] {
   background-color: #202225;
@@ -117,6 +118,7 @@ input[type=tel] {
 
 input[type=password]:focus,
 input[type=text]:focus,
+input[type=email]:focus,
 input[type=tel]:focus {
   background-color: #2C2F33;
   border: 1px solid #7289DA;
@@ -152,3 +154,10 @@ input::placeholder {
   background-color: #2C2F33; /* Hala koyu arka plan */
   color: #FFFFFF;
 }
+
+#formContent img {
+  animation: fadeIn 1s ease-in-out;
+  border-radius: 30px;
+}
+
+

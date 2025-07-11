@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import './Register.css';
+import logo from './assets/Logo.png'; // logo dosyasının yolu
 
 function Register({ toggleForm }) {
   const [formData, setFormData] = useState({
@@ -11,12 +12,12 @@ function Register({ toggleForm }) {
     mail: ''
   });
 
-  // Hangi alanlarda hata var, boolean tutarız
   const [errors, setErrors] = useState({});
 
-  const handleChange = e => {
+  const handleChange = (e) => {
     const { name, value } = e.target;
 
+    // Numara sadece rakam ve en fazla 10 karakter
     if (name === 'numara') {
       if (/^\d*$/.test(value) && value.length <= 10) {
         setFormData({ ...formData, [name]: value });
@@ -25,7 +26,6 @@ function Register({ toggleForm }) {
       setFormData({ ...formData, [name]: value });
     }
 
-    // Hata varsa, girerken temizleyelim
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: false }));
     }
@@ -33,26 +33,18 @@ function Register({ toggleForm }) {
 
   const validate = () => {
     const newErrors = {};
-    Object.entries(formData).forEach(([key, value]) => {
-      if (!value.trim()) {
-        newErrors[key] = true;
-      }
-    });
-
-    // Örnek: telefon numarası 10 haneli olmalı
-    if (formData.numara.length !== 10) {
-      newErrors.numara = true;
+    for (const field in formData) {
+      if (!formData[field].trim()) newErrors[field] = true;
     }
-
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0; // hata yoksa true
+    return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async e => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!validate()) {
-      alert('Lütfen formdaki tüm alanları doğru doldurun.');
+      alert('Lütfen tüm alanları doldurun.');
       return;
     }
 
@@ -65,17 +57,16 @@ function Register({ toggleForm }) {
       const response = await fetch('http://localhost:8080/api/kullanici/kayit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'omit', // çerez gönderme
         body: JSON.stringify(payload)
       });
 
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error);
-      }
+      if (!response.ok) throw new Error(await response.text());
 
       const result = await response.json();
       alert('Kayıt başarılı: ' + result.kullaniciAdi);
       toggleForm('login');
+
     } catch (err) {
       alert('Hata: ' + err.message);
     }
@@ -84,6 +75,8 @@ function Register({ toggleForm }) {
   return (
     <div className="wrapper fadeInDown">
       <div id="formContent">
+        <img src={logo} alt="Whispry Logo" style={{ width: '120px', marginTop: '20px' }} />
+        <br />
         <h2
           className="inactive underlineHover"
           onClick={() => toggleForm('login')}
@@ -93,7 +86,7 @@ function Register({ toggleForm }) {
         </h2>
         <h2 className="active">Kayıt Ol</h2>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} autoComplete="off">
           <input
             type="text"
             name="kullaniciAdi"
@@ -101,7 +94,7 @@ function Register({ toggleForm }) {
             placeholder="Kullanıcı Adı"
             value={formData.kullaniciAdi}
             onChange={handleChange}
-            required
+            autoComplete="off"
           />
           <input
             type="text"
@@ -110,7 +103,7 @@ function Register({ toggleForm }) {
             placeholder="İsim"
             value={formData.isim}
             onChange={handleChange}
-            required
+            autoComplete="off"
           />
           <input
             type="text"
@@ -119,16 +112,16 @@ function Register({ toggleForm }) {
             placeholder="Soyisim"
             value={formData.soyisim}
             onChange={handleChange}
-            required
+            autoComplete="off"
           />
           <input
-            type="text"
+            type="email"
             name="mail"
             className={`fadeIn second ${errors.mail ? 'input-error' : ''}`}
             placeholder="E-Posta"
             value={formData.mail}
             onChange={handleChange}
-            required
+            autoComplete="off"
           />
           <input
             type="tel"
@@ -137,7 +130,7 @@ function Register({ toggleForm }) {
             placeholder="Telefon Numarası"
             value={formData.numara}
             onChange={handleChange}
-            required
+            autoComplete="off"
           />
           <input
             type="password"
@@ -146,7 +139,7 @@ function Register({ toggleForm }) {
             placeholder="Şifre"
             value={formData.sifre}
             onChange={handleChange}
-            required
+            autoComplete="off"
           />
           <input
             type="submit"
