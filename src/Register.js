@@ -91,7 +91,6 @@ function Register({ toggleForm }) {
             className="fadeIn second"
             placeholder="Telefon Numarası"
             value={formData.Integer.parseInt(numara)}
-            //this is a test
             onChange={handleChange}
           />
           <input
