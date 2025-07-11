@@ -166,39 +166,52 @@ function MainMenu({ kullanici }) {
       </div>
 
       {/* Chat Container */}
-      <div className={styles.chatContainer}>
-        <div className={styles.chatHeader}>
-          <div className={styles.chatProfilePic}></div>
-          <span className={styles.chatUsername}>
-            {aktifAlici ? aktifAlici.kullaniciAdi : 'Kişi seçilmedi'}
-          </span>
-        </div>
+<div className={styles.chatContainer}>
+  <div className={styles.chatHeader}>
+    <div className={styles.chatProfilePic}></div>
+    <span className={styles.chatUsername}>
+      {aktifAlici ? aktifAlici.kullaniciAdi : 'Kişi seçilmedi'}
+    </span>
 
-        <div className={styles.messages}>
-          {mesajlar.map((msg, index) => (
-            <div
-              key={index}
-              className={`${styles.message} ${msg.gondericiId === kullanici.id ? styles.fromMe : styles.fromThem}`}
-            >
-              <div>{msg.icerik}</div>
-              <div className={styles.messageTime}>{formatZaman(msg.zaman)}</div>
-            </div>
-          ))}
-          <div ref={messagesEndRef} />
-        </div>
+    {/* Çıkış butonu */}
+    <button
+      className={styles.logoutButton}
+      title="Çıkış Yap"
+      onClick={() => {
+        localStorage.clear();
+        window.location.href = '/login';  // Login sayfasına yönlendir
+      }}
+    >
+      Çıkış Yap
+    </button>
+  </div>
 
-        <div className={styles.messageInputContainer}>
-          <input
-            type="text"
-            className={styles.messageInput}
-            placeholder="Mesaj yaz..."
-            value={mesaj}
-            onChange={(e) => setMesaj(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleMesajGonder()}
-          />
-          <button className={styles.sendButton} onClick={handleMesajGonder}>▶</button>
-        </div>
+  <div className={styles.messages}>
+    {mesajlar.map((msg, index) => (
+      <div
+        key={index}
+        className={`${styles.message} ${msg.gondericiId === kullanici.id ? styles.fromMe : styles.fromThem}`}
+      >
+        <div>{msg.icerik}</div>
+        <div className={styles.messageTime}>{formatZaman(msg.zaman)}</div>
       </div>
+    ))}
+    <div ref={messagesEndRef} />
+  </div>
+
+  <div className={styles.messageInputContainer}>
+    <input
+      type="text"
+      className={styles.messageInput}
+      placeholder="Mesaj yaz..."
+      value={mesaj}
+      onChange={(e) => setMesaj(e.target.value)}
+      onKeyDown={(e) => e.key === 'Enter' && handleMesajGonder()}
+    />
+    <button className={styles.sendButton} onClick={handleMesajGonder}>▶</button>
+  </div>
+</div>
+
 
       {/* Modal Ayarlar */}
       {modalAcik && (

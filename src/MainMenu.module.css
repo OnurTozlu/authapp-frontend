@@ -318,3 +318,22 @@
 .modalCloseButton:hover {
   background-color: #5b6eae;
 }
+
+.logoutButton {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: #DCDDDE;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 5px 10px;
+  border-radius: 5px;
+  transition: background-color 0.3s ease-in-out;
+}
+
+.logoutButton:hover {
+  background-color: #ff5555;
+  color: white;
+}
+
+
