@@ -7,12 +7,32 @@ function Login({ toggleForm }) {
     sifre: ''
   });
 
+  const [errors, setErrors] = useState({});
+
   const handleChange = e => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData({ ...formData, [name]: value });
+
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: false }));
+    }
+  };
+
+  const validate = () => {
+    const newErrors = {};
+    if (!formData.kullaniciAdi.trim()) newErrors.kullaniciAdi = true;
+    if (!formData.sifre.trim()) newErrors.sifre = true;
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async e => {
     e.preventDefault();
+
+    if (!validate()) {
+      alert('Lütfen tüm alanları doldurun.');
+      return;
+    }
 
     try {
       const response = await fetch('http://localhost:8080/api/kullanici/giris', {
@@ -27,9 +47,8 @@ function Login({ toggleForm }) {
       }
 
       const result = await response.json();
-
       alert('Giriş başarılı! Hoşgeldiniz, ' + result.isim);
-      // Giriş başarılı olduğunda istersen burada bir state update veya yönlendirme yapılabilir
+      // İstersen yönlendirme ya da state güncellemesi yapılabilir
 
     } catch (err) {
       alert('Giriş başarısız: ' + err.message);
@@ -40,7 +59,11 @@ function Login({ toggleForm }) {
     <div className="wrapper fadeInDown">
       <div id="formContent">
         <h2 className="active">Giriş Yap</h2>
-        <h2 className="inactive underlineHover" onClick={() => toggleForm('register')} style={{ cursor: 'pointer' }}>
+        <h2
+          className="inactive underlineHover"
+          onClick={() => toggleForm('register')}
+          style={{ cursor: 'pointer' }}
+        >
           Kayıt Ol
         </h2>
 
@@ -48,7 +71,7 @@ function Login({ toggleForm }) {
           <input
             type="text"
             name="kullaniciAdi"
-            className="fadeIn second"
+            className={`fadeIn second ${errors.kullaniciAdi ? 'input-error' : ''}`}
             placeholder="Kullanıcı Adı"
             value={formData.kullaniciAdi}
             onChange={handleChange}
@@ -56,7 +79,7 @@ function Login({ toggleForm }) {
           <input
             type="password"
             name="sifre"
-            className="fadeIn third"
+            className={`fadeIn third ${errors.sifre ? 'input-error' : ''}`}
             placeholder="Şifre"
             value={formData.sifre}
             onChange={handleChange}
