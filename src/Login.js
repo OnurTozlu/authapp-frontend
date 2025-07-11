@@ -1,6 +1,5 @@
-// Login.js
 import React, { useState } from 'react';
-import './Login.css';
+import styles from './Login.module.css';
 
 function Login({ toggleForm, onLoginSuccess }) {
   const [formData, setFormData] = useState({
@@ -14,67 +13,48 @@ function Login({ toggleForm, onLoginSuccess }) {
 
   const handleSubmit = async e => {
     e.preventDefault();
-
-    try {
-      const response = await fetch('http://localhost:8080/api/kullanici/giris', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
-
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error);
-      }
-
-      const result = await response.json();
-
-      alert('Giriş başarılı! Hoşgeldiniz, ' + result.isim);
-
-      // Ana menüye geçiş için callback
-      onLoginSuccess(result); // Burada result objesi kullanıcının bilgilerini içermeli
-
-    } catch (err) {
-      alert('Giriş başarısız: ' + err.message);
-    }
+    // Burada giriş API çağrısı yapılacak
   };
 
   return (
-    <div className="wrapper fadeInDown">
-      <div id="formContent">
-        <img src="./assets/Logo.png" alt="Whispry Logo" style={{ width: '120px', marginTop: '20px' }} />
-        <br />
-        <h2 className="active">Giriş Yap</h2>
-        <h2 className="inactive underlineHover" onClick={() => toggleForm('register')} style={{ cursor: 'pointer' }}>
-          Kayıt Ol
-        </h2>
+    <div className={styles.container}>
+      <div className={styles.box}>
+        <img src="./assets/Logo.png" alt="Whispry Logo" className={styles.logo} />
+        <h2 className={styles.heading}>Giriş Yap</h2>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} autoComplete="off">
           <input
             type="text"
             name="kullaniciAdi"
-            className="fadeIn second"
             placeholder="Kullanıcı Adı"
             value={formData.kullaniciAdi}
             onChange={handleChange}
+            className={styles.input}
+            autoComplete="off"
           />
           <input
             type="password"
             name="sifre"
-            className="fadeIn third"
             placeholder="Şifre"
             value={formData.sifre}
             onChange={handleChange}
+            className={styles.input}
+            autoComplete="off"
           />
           <input
             type="submit"
-            className="fadeIn fourth"
             value="Giriş Yap"
+            className={styles.button}
           />
         </form>
 
-        <div id="formFooter">
-          <a className="underlineHover" href="#">Şifremi Unuttum?</a>
+        <div className={styles.forgotPassword}>
+          <a href="#">Şifremi Unuttum?</a>
+        </div>
+
+        <div className={styles.toggle}>
+          Hesabın yok mu?{' '}
+          <span onClick={() => toggleForm('register')}>Kayıt Ol</span>
         </div>
       </div>
     </div>

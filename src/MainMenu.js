@@ -1,6 +1,5 @@
-// MainMenu.js
-import React, { useEffect, useState } from 'react';
-import './MainMenu.css';
+import React, { useState, useEffect, useRef } from 'react';
+import styles from './MainMenu.module.css';
 
 function MainMenu({ kullanici }) {
   const [arkadaslar, setArkadaslar] = useState([]);
@@ -8,111 +7,123 @@ function MainMenu({ kullanici }) {
   const [mesajlar, setMesajlar] = useState([]);
   const [mesaj, setMesaj] = useState('');
 
-  // Arkadaş listesini çek
+  const messagesEndRef = useRef(null);
+
+  // Örnek arkadaş verisi
   useEffect(() => {
-    fetch('http://localhost:8080/api/arkadaslar')
-      .then(res => res.json())
-      .then(data => setArkadaslar(data))
-      .catch(err => console.error('Arkadaşlar alınamadı', err));
+    setArkadaslar([
+      { id: 1, kullaniciAdi: 'ozan', isim: 'Ozan K.' },
+      { id: 2, kullaniciAdi: 'ayse', isim: 'Ayşe G.' },
+      { id: 3, kullaniciAdi: 'mehmet', isim: 'Mehmet T.' }
+    ]);
   }, []);
 
-  // Aktif konuşulan kişiyi ve mesajlarını getir
+  // Scroll son mesaja otomatik inme
   useEffect(() => {
-    if (aktifAlici) {
-      fetch(`http://localhost:8080/api/mesajlar?aliciId=${aktifAlici.id}`)
-        .then(res => res.json())
-        .then(data => setMesajlar(data))
-        .catch(err => console.error('Mesajlar alınamadı', err));
-    }
-  }, [aktifAlici]);
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [mesajlar]);
 
-  const handleMesajGonder = async () => {
-    if (mesaj.trim() === '' || !aktifAlici) return;
+  // Mesaj gönderme fonksiyonu
+  const handleMesajGonder = () => {
+    if (!mesaj.trim() || !aktifAlici) return;
 
     const yeniMesaj = {
-      gondericiId: kullanici.id,
-      aliciId: aktifAlici.id,
+      id: Date.now(),
+      gonderen: kullanici.kullaniciAdi,
+      alici: aktifAlici.kullaniciAdi,
       icerik: mesaj,
-      zaman: new Date().toISOString()
+      zaman: new Date().toLocaleTimeString(),
+      avatar: kullanici.avatar || null
     };
 
-    try {
-      const res = await fetch('http://localhost:8080/api/mesaj', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(yeniMesaj)
-      });
-
-      if (res.ok) {
-        setMesajlar([...mesajlar, yeniMesaj]);
-        setMesaj('');
-      }
-    } catch (err) {
-      console.error('Mesaj gönderilemedi', err);
-    }
+    setMesajlar(prev => [...prev, yeniMesaj]);
+    setMesaj('');
   };
 
   return (
-    <div className="main-container">
-      {/* Sol Panel */}
-      <div className="sidebar">
-        <input type="text" placeholder="Ara..." className="search-input1" />
-        <div className="user-list">
-          {arkadaslar.map((arkadas) => (
-            <button
-              key={arkadas.id}
-              className={`user-button ${aktifAlici && aktifAlici.id === arkadas.id ? 'selected' : ''}`}
-              onClick={() => setAktifAlici(arkadas)}
+    <div className={styles.container}>
+      {/* Sol Menü - Arkadaş Listesi */}
+      <nav className={styles.sidebar}>
+        <div className={styles.sidebarHeader}>Arkadaşlar</div>
+        <ul className={styles.friendList}>
+          {arkadaslar.map(a => (
+            <li
+              key={a.id}
+              className={`${styles.friendItem} ${aktifAlici?.id === a.id ? styles.activeFriend : ''}`}
+              onClick={() => setAktifAlici(a)}
+              title={a.isim}
             >
-              {arkadas.kullaniciAdi}
-            </button>
+              <div className={styles.friendAvatar}>
+                {a.kullaniciAdi.charAt(0).toUpperCase()}
+              </div>
+              <span className={styles.friendName}>{a.kullaniciAdi}</span>
+            </li>
           ))}
-        </div>
+        </ul>
+      </nav>
 
-        <div className="sidebar-footer">
-          <div className="current-user">
-            <div className="profile-pic"></div>
-            <span className="username">{kullanici.kullaniciAdi}</span>
-          </div>
-          <button className="settings-button">Ayarlar</button>
-        </div>
-      </div>
-
-      {/* Sağ Panel */}
-      <div className="chat-container">
-        {/* Sohbet edilen kişi */}
-        <div className="chat-header">
-          <div className="chat-profile-pic"></div>
-          <span className="chat-username">
-            {aktifAlici ? aktifAlici.kullaniciAdi : 'Kişi seçilmedi'}
-          </span>
-        </div>
+      {/* Ana Chat Alanı */}
+      <main className={styles.chatArea}>
+        {/* Chat Header */}
+        <header className={styles.chatHeader}>
+          {aktifAlici ? (
+            <>
+              <div className={styles.chatUserAvatar}>
+                {aktifAlici.kullaniciAdi.charAt(0).toUpperCase()}
+              </div>
+              <div className={styles.chatUserName}>{aktifAlici.kullaniciAdi}</div>
+            </>
+          ) : (
+            <div className={styles.noChatSelected}>Bir arkadaş seçin</div>
+          )}
+        </header>
 
         {/* Mesajlar */}
-        <div className="messages">
-          {mesajlar.map((msg, index) => (
-            <div
-              key={index}
-              className={`message ${msg.gondericiId === kullanici.id ? 'from-me' : 'from-them'}`}
-            >
-              {msg.icerik}
-            </div>
-          ))}
-        </div>
+        <section className={styles.chatMessages}>
+          {aktifAlici ? (
+            mesajlar
+              .filter(m => m.alici === aktifAlici.kullaniciAdi || m.gonderen === aktifAlici.kullaniciAdi)
+              .map(m => {
+                const sent = m.gonderen === kullanici.kullaniciAdi;
+                return (
+                  <div
+                    key={m.id}
+                    className={`${styles.message} ${sent ? styles.messageSent : styles.messageReceived}`}
+                  >
+                    {!sent && (
+                      <div className={styles.msgAvatar}>
+                        {m.gonderen.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <div className={styles.msgContent}>
+                      <div className={styles.msgText}>{m.icerik}</div>
+                      <div className={styles.msgTime}>{m.zaman}</div>
+                    </div>
+                  </div>
+                );
+              })
+          ) : (
+            <div className={styles.noMessages}>Mesajlaşmak için bir arkadaş seçin.</div>
+          )}
+          <div ref={messagesEndRef} />
+        </section>
 
-        {/* Mesaj Yaz */}
-        <div className="message-input-container">
-          <input
-            type="text"
-            className="message-input"
-            placeholder="Mesaj yaz..."
-            value={mesaj}
-            onChange={(e) => setMesaj(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleMesajGonder()}
-          />
-          <button className="send-button" onClick={handleMesajGonder}>▶</button>
-        </div>
-      </div>
+        {/* Mesaj Gönderme Kutusu */}
+        {aktifAlici && (
+          <footer className={styles.chatInputArea}>
+            <input
+              type="text"
+              placeholder="Mesaj yaz..."
+              value={mesaj}
+              onChange={e => setMesaj(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleMesajGonder()}
+              className={styles.chatInput}
+              autoFocus
+            />
+            <button onClick={handleMesajGonder} className={styles.sendButton}>Gönder</button>
+          </footer>
+        )}
+      </main>
     </div>
   );
 }

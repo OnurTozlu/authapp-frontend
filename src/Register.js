@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import './Register.module.css';
+import styles from './Register.module.css';
 
 function Register({ toggleForm }) {
   const [formData, setFormData] = useState({
@@ -16,7 +16,6 @@ function Register({ toggleForm }) {
   const handleChange = (e) => {
     const { name, value } = e.target;
 
-    // Numara sadece rakam ve en fazla 10 karakter
     if (name === 'numara') {
       if (/^\d*$/.test(value) && value.length <= 10) {
         setFormData({ ...formData, [name]: value });
@@ -56,7 +55,7 @@ function Register({ toggleForm }) {
       const response = await fetch('http://localhost:8080/api/kullanici/kayit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'omit', // çerez gönderme
+        credentials: 'omit',
         body: JSON.stringify(payload)
       });
 
@@ -65,87 +64,83 @@ function Register({ toggleForm }) {
       const result = await response.json();
       alert('Kayıt başarılı: ' + result.kullaniciAdi);
       toggleForm('login');
-
     } catch (err) {
       alert('Hata: ' + err.message);
     }
   };
 
   return (
-    <div className="wrapper fadeInDown">
-      <div id="formContent">
-        <img src="./assets/Logo.png" alt="Whispry Logo" style={{ width: '120px', marginTop: '20px' }} />
-        <br />
-        <h2
-          className="inactive underlineHover"
-          onClick={() => toggleForm('login')}
-          style={{ cursor: 'pointer' }}
-        >
-          Giriş Yap
-        </h2>
-        <h2 className="active">Kayıt Ol</h2>
+    <div className={styles.container}>
+      <div className={styles.box}>
+        <img src="./assets/Logo.png" alt="Whispry Logo" className={styles.logo} />
+        <h2 className={styles.heading}>Kayıt Ol</h2>
 
         <form onSubmit={handleSubmit} autoComplete="off">
           <input
             type="text"
             name="kullaniciAdi"
-            className={`fadeIn second ${errors.kullaniciAdi ? 'input-error' : ''}`}
             placeholder="Kullanıcı Adı"
             value={formData.kullaniciAdi}
             onChange={handleChange}
+            className={styles.input}
             autoComplete="off"
           />
           <input
             type="text"
             name="isim"
-            className={`fadeIn second ${errors.isim ? 'input-error' : ''}`}
             placeholder="İsim"
             value={formData.isim}
             onChange={handleChange}
+            className={styles.input}
             autoComplete="off"
           />
           <input
             type="text"
             name="soyisim"
-            className={`fadeIn second ${errors.soyisim ? 'input-error' : ''}`}
             placeholder="Soyisim"
             value={formData.soyisim}
             onChange={handleChange}
+            className={styles.input}
             autoComplete="off"
           />
           <input
             type="email"
             name="mail"
-            className={`fadeIn second ${errors.mail ? 'input-error' : ''}`}
             placeholder="E-Posta"
             value={formData.mail}
             onChange={handleChange}
+            className={styles.input}
             autoComplete="off"
           />
           <input
             type="tel"
             name="numara"
-            className={`fadeIn second ${errors.numara ? 'input-error' : ''}`}
             placeholder="Telefon Numarası"
             value={formData.numara}
             onChange={handleChange}
+            className={styles.input}
             autoComplete="off"
           />
           <input
             type="password"
             name="sifre"
-            className={`fadeIn third ${errors.sifre ? 'input-error' : ''}`}
             placeholder="Şifre"
             value={formData.sifre}
             onChange={handleChange}
+            className={styles.input}
             autoComplete="off"
           />
           <input
             type="submit"
-            className="fadeIn fourth"
             value="Kayıt Ol"
+            className={styles.button}
           />
         </form>
+
+        <div className={styles.toggle}>
+          Hesabın var mı?{' '}
+          <span onClick={() => toggleForm('login')}>Giriş Yap</span>
+        </div>
       </div>
     </div>
   );

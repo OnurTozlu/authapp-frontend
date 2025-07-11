@@ -1,63 +1,48 @@
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap');
 
-html, body {
-  margin: 0;
-  padding: 0;
-  height: 100%;
-  background-color: #2f3136;
-  font-family: 'Poppins', sans-serif;
-  color: #ffffff;
-  overflow-y: auto; /* Sayfa scrollu aktif */
-}
-
 .container {
-  min-height: 100vh; /* En az ekran yüksekliği kadar */
+  font-family: 'Poppins', sans-serif;
+  background-color: #2f3136;
+  color: #ffffff;
+  height: 100vh;
   display: flex;
   justify-content: center;
-  align-items: flex-start; /* Yukardan hizala */
-  padding: 4rem 1rem; /* Yukarı ve aşağı boşluk */
-  box-sizing: border-box;
+  align-items: center;
 }
 
 .box {
   background-color: #36393f;
-  padding: 2rem 2.5rem;
+  padding: 2rem;
   border-radius: 12px;
   box-shadow: 0 0 12px rgba(0, 0, 0, 0.35);
   width: 100%;
   max-width: 400px;
   text-align: center;
-  /* max-height ve overflow kaldırıldı */
 }
 
 .logo {
   width: 120px;
   margin-bottom: 20px;
-  user-select: none;
 }
 
 .heading {
   font-size: 1.6rem;
   margin-bottom: 1.5rem;
   font-weight: 600;
-  user-select: none;
 }
 
 .input {
   width: 100%;
-  padding: 0.75rem 1rem;
+  padding: 0.8rem;
   margin-bottom: 1rem;
   border: 1px solid transparent;
   border-radius: 8px;
-  background-color: #202225;
+  background-color: #202225; /* Discord koyu arka plan */
   color: #ffffff;
   font-size: 1rem;
   transition: box-shadow 0.3s ease, border-color 0.3s ease;
-  outline-offset: 2px;
-}
-
-.input::placeholder {
-  color: #b9bbbe;
+  outline: none;
+  cursor: text;
 }
 
 .input:hover {
@@ -75,23 +60,21 @@ html, body {
   background-color: #7289DA;
   border: none;
   color: white;
-  padding: 12px 40px;
+  padding: 15px 80px;
   text-align: center;
   text-decoration: none;
   display: inline-block;
   text-transform: uppercase;
-  font-size: 14px;
-  box-shadow: 0 8px 24px rgba(114, 137, 218, 0.5);
+  font-size: 13px;
+  box-shadow: 0 10px 30px rgba(114, 137, 218, 0.6);
   border-radius: 5px;
-  margin: 25px 0 40px 0;
-  transition: background-color 0.3s ease, transform 0.1s ease;
+  margin: 25px 20px 40px 20px;
+  transition: all 0.3s ease-in-out;
   cursor: pointer;
-  user-select: none;
 }
 
 .button:hover {
   background-color: #5b6eae;
-  text-decoration: none;
 }
 
 .button:active {
@@ -101,28 +84,24 @@ html, body {
 .toggle {
   margin-top: 1rem;
   font-size: 0.95rem;
-  user-select: none;
 }
 
 .toggle span {
   color: #7289da;
   cursor: pointer;
   font-weight: 500;
-  transition: text-decoration 0.2s ease;
 }
 
-.toggle span:hover {
+.forgotPassword {
+  margin-top: 0.8rem;
+  font-size: 0.85rem;
+}
+
+.forgotPassword a {
+  color: #999;
+  text-decoration: none;
+}
+
+.forgotPassword a:hover {
   text-decoration: underline;
-}
-
-/* Responsive için küçük ekranlarda padding küçültülebilir */
-@media (max-width: 420px) {
-  .box {
-    padding: 1.5rem 1.8rem;
-  }
-  
-  .button {
-    padding: 12px 30px;
-    font-size: 13px;
-  }
 }
