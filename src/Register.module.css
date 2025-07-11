@@ -44,7 +44,7 @@ html, body {
 }
 
 .input {
-  width: 100%;
+  width: 80%;
   padding: 0.75rem 1rem;
   margin-bottom: 1rem;
   border: 1px solid transparent;
@@ -126,3 +126,12 @@ html, body {
     font-size: 13px;
   }
 }
+
+.logo {
+  width: 120px;
+  margin-bottom: 20px;
+  user-select: none;
+  border-radius: 30px; /* Köşeleri yumuşatır */
+  transition: border-radius 0.3s ease;
+}
+

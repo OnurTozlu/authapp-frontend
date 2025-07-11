@@ -13,7 +13,29 @@ function Login({ toggleForm, onLoginSuccess }) {
 
   const handleSubmit = async e => {
     e.preventDefault();
-    // Burada giriş API çağrısı yapılacak
+
+    try {
+      const response = await fetch('http://localhost:8080/api/kullanici/giris', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error);
+      }
+
+      const result = await response.json();
+
+      alert('Giriş başarılı! Hoşgeldiniz, ' + result.isim);
+
+      // Ana menüye geçiş için callback
+      onLoginSuccess(result); // Burada result objesi kullanıcının bilgilerini içermeli
+
+    } catch (err) {
+      alert('Giriş başarısız: ' + err.message);
+    }
   };
 
   return (
