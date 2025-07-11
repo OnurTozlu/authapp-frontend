@@ -90,7 +90,8 @@ function Register({ toggleForm }) {
             name="numara"
             className="fadeIn second"
             placeholder="Telefon Numarası"
-            value={formData.numara}
+            value={formData.Integer.parseInt(numara)}
+            //this is a test
             onChange={handleChange}
           />
           <input
