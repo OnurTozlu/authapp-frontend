@@ -1,14 +1,19 @@
-// MainMenu.js
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import styles from './MainMenu.module.css';
+import { Client } from '@stomp/stompjs';
+import SockJS from 'sockjs-client';
 
 function MainMenu({ kullanici }) {
   const [arkadaslar, setArkadaslar] = useState([]);
   const [aktifAlici, setAktifAlici] = useState(null);
   const [mesajlar, setMesajlar] = useState([]);
   const [mesaj, setMesaj] = useState('');
+  const [modalAcik, setModalAcik] = useState(false);
+  const [yeniArkadasAdi, setYeniArkadasAdi] = useState('');
+  const messagesEndRef = useRef(null);
+  const client = useRef(null);
 
-  // Arkadaş listesini çek
+  // Arkadaş listesini çek (API)
   useEffect(() => {
     fetch('http://localhost:8080/api/arkadaslar')
       .then(res => res.json())
@@ -16,7 +21,7 @@ function MainMenu({ kullanici }) {
       .catch(err => console.error('Arkadaşlar alınamadı', err));
   }, []);
 
-  // Aktif alıcı değiştiğinde mesajları getir
+  // Aktif alıcı değiştiğinde o kişinin geçmiş mesajlarını çek (API)
   useEffect(() => {
     if (aktifAlici) {
       fetch(`http://localhost:8080/api/mesajlar?aliciId=${aktifAlici.id}`)
@@ -28,8 +33,44 @@ function MainMenu({ kullanici }) {
     }
   }, [aktifAlici]);
 
-  // Mesaj gönderme fonksiyonu
-  const handleMesajGonder = async () => {
+  // Mesajlar güncellendiğinde otomatik scroll yap
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [mesajlar]);
+
+  // WebSocket bağlantısı
+  useEffect(() => {
+    client.current = new Client({
+      webSocketFactory: () => new SockJS('http://localhost:8080/ws'),
+      reconnectDelay: 5000,
+      onConnect: () => {
+        // Aktif alıcıya özel topic'e subscribe et (örnek: /topic/messages/{aktifAliciId})
+        if (aktifAlici) {
+          client.current.subscribe(`/topic/messages/${aktifAlici.id}`, (message) => {
+            if (message.body) {
+              const yeniMesaj = JSON.parse(message.body);
+              setMesajlar(prev => [...prev, yeniMesaj]);
+            }
+          });
+        }
+      },
+      onStompError: (frame) => {
+        console.error('STOMP Hatası: ', frame);
+      }
+    });
+
+    client.current.activate();
+
+    // Temizlik: component unmount veya aktifAlici değişince
+    return () => {
+      if (client.current) client.current.deactivate();
+    };
+  }, [aktifAlici]); // Aktif alıcı değiştikçe WebSocket aboneliği yenilenir
+
+  // Mesaj gönderme (WebSocket ile)
+  const handleMesajGonder = () => {
     if (mesaj.trim() === '' || !aktifAlici) return;
 
     const yeniMesaj = {
@@ -39,102 +80,113 @@ function MainMenu({ kullanici }) {
       zaman: new Date().toISOString()
     };
 
+    // Mesajı backend'e gönder
+    client.current.publish({
+      destination: '/app/chat.sendMessage', // Backend'in beklediği endpoint
+      body: JSON.stringify(yeniMesaj)
+    });
+
+    // Mesaj inputu temizle
+    setMesaj('');
+  };
+
+  // Yeni arkadaş ekleme (API)
+  const handleYeniArkadasEkle = async () => {
+    if (yeniArkadasAdi.trim() === '') return;
+
     try {
-      const res = await fetch('http://localhost:8080/api/mesaj', {
+      const res = await fetch('http://localhost:8080/api/arkadaslar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(yeniMesaj)
+        body: JSON.stringify({ kullaniciAdi: yeniArkadasAdi })
       });
 
       if (res.ok) {
-        // Eğer backend mesajın id’sini dönerse burayı res.json() olarak değiştir
-        setMesajlar(prev => [...prev, yeniMesaj]);
-        setMesaj('');
+        const yeniArkadas = await res.json();
+        setArkadaslar([...arkadaslar, yeniArkadas]);
+        setYeniArkadasAdi('');
       } else {
-        console.error('Mesaj gönderilirken hata oluştu');
+        alert('Arkadaş eklenirken hata oluştu.');
       }
     } catch (err) {
-      console.error('Mesaj gönderilemedi', err);
+      console.error('Arkadaş eklenemedi', err);
     }
   };
 
-  // Mesaj kutusundaki enter tuşu ile gönderme
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleMesajGonder();
-    }
+  // Zaman formatlama helper
+  const formatZaman = (isoString) => {
+    const tarih = new Date(isoString);
+    return `${tarih.getHours().toString().padStart(2, '0')}:${tarih.getMinutes().toString().padStart(2, '0')}`;
   };
 
   return (
     <div className={styles.mainContainer}>
-      {/* Sol Panel */}
+      {/* Sidebar */}
       <div className={styles.sidebar}>
-        <input
-          type="text"
-          placeholder="Ara..."
-          className={styles.searchInput}
-        />
+        <input type="text" placeholder="Ara..." className={styles.searchInput1} />
+
+        {/* Arkadaş ekleme */}
+        <div className={styles.addFriendContainer}>
+          <input
+            type="text"
+            placeholder="Yeni arkadaş adı..."
+            value={yeniArkadasAdi}
+            onChange={e => setYeniArkadasAdi(e.target.value)}
+            className={styles.addFriendInput}
+          />
+          <button onClick={handleYeniArkadasEkle} className={styles.addFriendButton}>Ekle</button>
+        </div>
+
         <div className={styles.userList}>
-          {arkadaslar.length > 0 ? (
-            arkadaslar.map((arkadas) => (
-              <button
-                key={arkadas.id}
-                className={`${styles.userButton} ${aktifAlici && aktifAlici.id === arkadas.id ? styles.selected : ''}`}
-                onClick={() => setAktifAlici(arkadas)}
-              >
-                {arkadas.kullaniciAdi}
-              </button>
-            ))
-          ) : (
-            <p style={{ color: '#888' }}>Hiç arkadaş bulunamadı.</p>
-          )}
+          {arkadaslar.map((arkadas) => (
+            <button
+              key={arkadas.id}
+              className={`${styles.userButton} ${aktifAlici && aktifAlici.id === arkadas.id ? styles.selected : ''}`}
+              onClick={() => setAktifAlici(arkadas)}
+            >
+              {arkadas.kullaniciAdi}
+            </button>
+          ))}
         </div>
 
         <div className={styles.sidebarFooter}>
           <div className={styles.currentUser}>
-            <div className={styles.profilePic}>
-              {kullanici.kullaniciAdi ? kullanici.kullaniciAdi[0].toUpperCase() : ''}
-            </div>
+            <div className={styles.profilePic}></div>
             <span className={styles.username}>{kullanici.kullaniciAdi}</span>
           </div>
-          <button className={styles.settingsButton}>Ayarlar</button>
+
+          <button
+            className={styles.settingsButton}
+            title="Ayarlar"
+            onClick={() => setModalAcik(true)}
+          >
+            ⚙️
+          </button>
         </div>
       </div>
 
-      {/* Sağ Panel */}
+      {/* Chat Container */}
       <div className={styles.chatContainer}>
-        {/* Chat header */}
         <div className={styles.chatHeader}>
-          <div className={styles.chatProfilePic}>
-            {aktifAlici ? aktifAlici.kullaniciAdi[0].toUpperCase() : ''}
-          </div>
+          <div className={styles.chatProfilePic}></div>
           <span className={styles.chatUsername}>
             {aktifAlici ? aktifAlici.kullaniciAdi : 'Kişi seçilmedi'}
           </span>
         </div>
 
-        {/* Mesajlar */}
         <div className={styles.messages}>
-          {aktifAlici ? (
-            mesajlar.length > 0 ? (
-              mesajlar.map((msg, index) => (
-                <div
-                  key={index}
-                  className={`${styles.message} ${msg.gondericiId === kullanici.id ? styles.fromMe : styles.fromThem}`}
-                >
-                  {msg.icerik}
-                </div>
-              ))
-            ) : (
-              <p style={{ color: '#888' }}>Henüz mesaj yok.</p>
-            )
-          ) : (
-            <p style={{ color: '#888' }}>Lütfen bir kişi seçin.</p>
-          )}
+          {mesajlar.map((msg, index) => (
+            <div
+              key={index}
+              className={`${styles.message} ${msg.gondericiId === kullanici.id ? styles.fromMe : styles.fromThem}`}
+            >
+              <div>{msg.icerik}</div>
+              <div className={styles.messageTime}>{formatZaman(msg.zaman)}</div>
+            </div>
+          ))}
+          <div ref={messagesEndRef} />
         </div>
 
-        {/* Mesaj yazma alanı */}
         <div className={styles.messageInputContainer}>
           <input
             type="text"
@@ -142,18 +194,22 @@ function MainMenu({ kullanici }) {
             placeholder="Mesaj yaz..."
             value={mesaj}
             onChange={(e) => setMesaj(e.target.value)}
-            onKeyDown={handleKeyDown}
-            disabled={!aktifAlici}
+            onKeyDown={(e) => e.key === 'Enter' && handleMesajGonder()}
           />
-          <button
-            className={styles.sendButton}
-            onClick={handleMesajGonder}
-            disabled={!aktifAlici || mesaj.trim() === ''}
-          >
-            ▶
-          </button>
+          <button className={styles.sendButton} onClick={handleMesajGonder}>▶</button>
         </div>
       </div>
+
+      {/* Modal Ayarlar */}
+      {modalAcik && (
+        <div className={styles.modalOverlay} onClick={() => setModalAcik(false)}>
+          <div className={styles.modalContent} onClick={e => e.stopPropagation()}>
+            <h2>Ayarlar</h2>
+            <p>Buraya ayar seçenekleri ekleyebilirsin.</p>
+            <button onClick={() => setModalAcik(false)} className={styles.modalCloseButton}>Kapat</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
