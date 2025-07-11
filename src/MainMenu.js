@@ -13,18 +13,28 @@ function MainMenu({ kullanici }) {
   const messagesEndRef = useRef(null);
   const client = useRef(null);
 
-  // Arkadaş listesini çek (API)
+  // Arkadaş listesini çek (API) — token eklendi
   useEffect(() => {
-    fetch('http://localhost:8080/api/arkadaslar')
+    const token = localStorage.getItem('token');
+    fetch('http://localhost:8080/api/arkadaslar', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    })
       .then(res => res.json())
       .then(data => setArkadaslar(data))
       .catch(err => console.error('Arkadaşlar alınamadı', err));
   }, []);
 
-  // Aktif alıcı değiştiğinde o kişinin geçmiş mesajlarını çek (API)
+  // Aktif alıcı değiştiğinde o kişinin geçmiş mesajlarını çek (API) — token eklendi
   useEffect(() => {
     if (aktifAlici) {
-      fetch(`http://localhost:8080/api/mesajlar?aliciId=${aktifAlici.id}`)
+      const token = localStorage.getItem('token');
+      fetch(`http://localhost:8080/api/mesajlar?aliciId=${aktifAlici.id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
         .then(res => res.json())
         .then(data => setMesajlar(data))
         .catch(err => console.error('Mesajlar alınamadı', err));
@@ -40,13 +50,17 @@ function MainMenu({ kullanici }) {
     }
   }, [mesajlar]);
 
-  // WebSocket bağlantısı
+  // WebSocket bağlantısı — connectHeaders içinde token gönderildi
   useEffect(() => {
+    const token = localStorage.getItem('token');
+
     client.current = new Client({
       webSocketFactory: () => new SockJS('http://localhost:8080/ws'),
       reconnectDelay: 5000,
+      connectHeaders: {
+        Authorization: `Bearer ${token}`
+      },
       onConnect: () => {
-        // Aktif alıcıya özel topic'e subscribe et (örnek: /topic/messages/{aktifAliciId})
         if (aktifAlici) {
           client.current.subscribe(`/topic/messages/${aktifAlici.id}`, (message) => {
             if (message.body) {
@@ -63,11 +77,10 @@ function MainMenu({ kullanici }) {
 
     client.current.activate();
 
-    // Temizlik: component unmount veya aktifAlici değişince
     return () => {
       if (client.current) client.current.deactivate();
     };
-  }, [aktifAlici]); // Aktif alıcı değiştikçe WebSocket aboneliği yenilenir
+  }, [aktifAlici]);
 
   // Mesaj gönderme (WebSocket ile)
   const handleMesajGonder = () => {
@@ -80,24 +93,27 @@ function MainMenu({ kullanici }) {
       zaman: new Date().toISOString()
     };
 
-    // Mesajı backend'e gönder
     client.current.publish({
-      destination: '/app/chat.sendMessage', // Backend'in beklediği endpoint
+      destination: '/app/chat.sendMessage',
       body: JSON.stringify(yeniMesaj)
     });
 
-    // Mesaj inputu temizle
     setMesaj('');
   };
 
-  // Yeni arkadaş ekleme (API)
+  // Yeni arkadaş ekleme (API) — token eklendi
   const handleYeniArkadasEkle = async () => {
     if (yeniArkadasAdi.trim() === '') return;
+
+    const token = localStorage.getItem('token');
 
     try {
       const res = await fetch('http://localhost:8080/api/arkadaslar', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ kullaniciAdi: yeniArkadasAdi })
       });
 
@@ -166,52 +182,51 @@ function MainMenu({ kullanici }) {
       </div>
 
       {/* Chat Container */}
-<div className={styles.chatContainer}>
-  <div className={styles.chatHeader}>
-    <div className={styles.chatProfilePic}></div>
-    <span className={styles.chatUsername}>
-      {aktifAlici ? aktifAlici.kullaniciAdi : 'Kişi seçilmedi'}
-    </span>
+      <div className={styles.chatContainer}>
+        <div className={styles.chatHeader}>
+          <div className={styles.chatProfilePic}></div>
+          <span className={styles.chatUsername}>
+            {aktifAlici ? aktifAlici.kullaniciAdi : 'Kişi seçilmedi'}
+          </span>
 
-    {/* Çıkış butonu */}
-    <button
-      className={styles.logoutButton}
-      title="Çıkış Yap"
-      onClick={() => {
-        localStorage.clear();
-        window.location.href = '/login';  // Login sayfasına yönlendir
-      }}
-    >
-      Çıkış Yap
-    </button>
-  </div>
+          {/* Çıkış butonu */}
+          <button
+            className={styles.logoutButton}
+            title="Çıkış Yap"
+            onClick={() => {
+              localStorage.clear();
+              window.location.href = '/login';  // Login sayfasına yönlendir
+            }}
+          >
+            Çıkış Yap
+          </button>
+        </div>
 
-  <div className={styles.messages}>
-    {mesajlar.map((msg, index) => (
-      <div
-        key={index}
-        className={`${styles.message} ${msg.gondericiId === kullanici.id ? styles.fromMe : styles.fromThem}`}
-      >
-        <div>{msg.icerik}</div>
-        <div className={styles.messageTime}>{formatZaman(msg.zaman)}</div>
+        <div className={styles.messages}>
+          {mesajlar.map((msg, index) => (
+            <div
+              key={index}
+              className={`${styles.message} ${msg.gondericiId === kullanici.id ? styles.fromMe : styles.fromThem}`}
+            >
+              <div>{msg.icerik}</div>
+              <div className={styles.messageTime}>{formatZaman(msg.zaman)}</div>
+            </div>
+          ))}
+          <div ref={messagesEndRef} />
+        </div>
+
+        <div className={styles.messageInputContainer}>
+          <input
+            type="text"
+            className={styles.messageInput}
+            placeholder="Mesaj yaz..."
+            value={mesaj}
+            onChange={(e) => setMesaj(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleMesajGonder()}
+          />
+          <button className={styles.sendButton} onClick={handleMesajGonder}>▶</button>
+        </div>
       </div>
-    ))}
-    <div ref={messagesEndRef} />
-  </div>
-
-  <div className={styles.messageInputContainer}>
-    <input
-      type="text"
-      className={styles.messageInput}
-      placeholder="Mesaj yaz..."
-      value={mesaj}
-      onChange={(e) => setMesaj(e.target.value)}
-      onKeyDown={(e) => e.key === 'Enter' && handleMesajGonder()}
-    />
-    <button className={styles.sendButton} onClick={handleMesajGonder}>▶</button>
-  </div>
-</div>
-
 
       {/* Modal Ayarlar */}
       {modalAcik && (

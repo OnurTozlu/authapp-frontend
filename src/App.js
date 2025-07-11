@@ -1,4 +1,3 @@
-// App.js
 import React, { useState } from 'react';
 import Login from './Login';
 import Register from './Register';
@@ -7,7 +6,7 @@ import MainMenu from './MainMenu';
 function App() {
   const [currentForm, setCurrentForm] = useState('login');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [kullanici, setKullanici] = useState(null); // Kullanıcı bilgilerini sakla
+  const [kullanici, setKullanici] = useState(null);
 
   const toggleForm = (formName) => {
     setCurrentForm(formName);
@@ -18,10 +17,17 @@ function App() {
     setKullanici(kullaniciBilgisi);
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('token'); // Token’ı sil
+    setIsLoggedIn(false);
+    setKullanici(null);
+    setCurrentForm('login');
+  };
+
   return (
     <div className="App">
       {isLoggedIn ? (
-        <MainMenu kullanici={kullanici} />
+        <MainMenu kullanici={kullanici} onLogout={handleLogout} />
       ) : (
         currentForm === 'login' ? (
           <Login toggleForm={toggleForm} onLoginSuccess={handleLoginSuccess} />

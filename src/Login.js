@@ -28,10 +28,19 @@ function Login({ toggleForm, onLoginSuccess }) {
 
       const result = await response.json();
 
-      alert('Giriş başarılı! Hoşgeldiniz, ' + result.isim);
+      // Burada result objesinin içinde token olduğunu varsayıyoruz
+      const token = result.token;
 
-      // Ana menüye geçiş için callback
-      onLoginSuccess(result); // Burada result objesi kullanıcının bilgilerini içermeli
+      if (!token) {
+        throw new Error("Token alınamadı");
+      }
+
+      // Token'ı localStorage'da sakla
+      localStorage.setItem("token", token);
+
+
+      // Ana menüye geçiş için callback, token dahil result'u gönderebilirsin
+      onLoginSuccess(result);
 
     } catch (err) {
       alert('Giriş başarısız: ' + err.message);
