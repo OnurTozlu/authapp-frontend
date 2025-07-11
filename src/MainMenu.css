@@ -30,8 +30,8 @@ body, html {
   border-right: 1px solid #202225;
 }
 
-.search-input {
-  padding: 12px;
+.search-input1 {
+  padding: 8px 12px;
   border-radius: 5px;
   border: 2px solid #7289DA;
   font-weight: 600;

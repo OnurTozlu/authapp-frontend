@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import './Register.module.css';
-import logo from './assets/Logo.png'; // logo dosyasının yolu
 
 function Register({ toggleForm }) {
   const [formData, setFormData] = useState({
@@ -75,7 +74,7 @@ function Register({ toggleForm }) {
   return (
     <div className="wrapper fadeInDown">
       <div id="formContent">
-        <img src={logo} alt="Whispry Logo" style={{ width: '120px', marginTop: '20px' }} />
+        <img src="./assets/Logo.png" alt="Whispry Logo" style={{ width: '120px', marginTop: '20px' }} />
         <br />
         <h2
           className="inactive underlineHover"

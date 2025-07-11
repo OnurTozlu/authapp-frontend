@@ -56,12 +56,12 @@ function MainMenu({ kullanici }) {
     <div className="main-container">
       {/* Sol Panel */}
       <div className="sidebar">
-        <input type="text" placeholder="Ara..." className="search-input" />
+        <input type="text" placeholder="Ara..." className="search-input1" />
         <div className="user-list">
           {arkadaslar.map((arkadas) => (
             <button
               key={arkadas.id}
-              className="user-button"
+              className={`user-button ${aktifAlici && aktifAlici.id === arkadas.id ? 'selected' : ''}`}
               onClick={() => setAktifAlici(arkadas)}
             >
               {arkadas.kullaniciAdi}
@@ -93,7 +93,7 @@ function MainMenu({ kullanici }) {
           {mesajlar.map((msg, index) => (
             <div
               key={index}
-              className={`message ${msg.gondericiId === kullanici.id ? 'own' : ''}`}
+              className={`message ${msg.gondericiId === kullanici.id ? 'from-me' : 'from-them'}`}
             >
               {msg.icerik}
             </div>

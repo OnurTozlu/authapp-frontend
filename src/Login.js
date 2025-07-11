@@ -1,7 +1,6 @@
 // Login.js
 import React, { useState } from 'react';
 import './Login.css';
-import logo from './assets/Logo.png'; // logo dosyasının yolu
 
 function Login({ toggleForm, onLoginSuccess }) {
   const [formData, setFormData] = useState({
@@ -43,7 +42,7 @@ function Login({ toggleForm, onLoginSuccess }) {
   return (
     <div className="wrapper fadeInDown">
       <div id="formContent">
-        <img src={logo} alt="Whispry Logo" style={{ width: '120px', marginTop: '20px' }} />
+        <img src="./assets/Logo.png" alt="Whispry Logo" style={{ width: '120px', marginTop: '20px' }} />
         <br />
         <h2 className="active">Giriş Yap</h2>
         <h2 className="inactive underlineHover" onClick={() => toggleForm('register')} style={{ cursor: 'pointer' }}>
