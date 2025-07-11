@@ -1,0 +1,259 @@
+@import url('https://fonts.googleapis.com/css?family=Poppins');
+
+/* GENEL */
+
+* {
+  box-sizing: border-box;
+}
+
+body, html {
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  font-family: 'Poppins', sans-serif;
+  background-color: #56baed;
+  color: #333;
+}
+
+/* Kapsayıcı */
+.chat-container {
+  display: flex;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+  border-radius: 10px;
+  margin: 20px;
+  box-shadow: 0 30px 60px rgba(0,0,0,0.3);
+  background: #fff;
+}
+
+/* --- SOL MENÜ --- */
+.sidebar {
+  width: 260px;
+  border-right: 1px solid #dce8f1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: #f6f6f6;
+  padding: 20px;
+}
+
+.search-button {
+  background-color: #56baed;
+  color: white;
+  border: none;
+  font-weight: 600;
+  padding: 12px;
+  border-radius: 5px;
+  cursor: pointer;
+  box-shadow: 0 10px 30px rgba(95,186,233,0.4);
+  margin-bottom: 20px;
+  transition: background-color 0.3s ease;
+}
+
+.search-button:hover {
+  background-color: #39ace7;
+}
+
+.user-list {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  overflow-y: auto;
+  padding-right: 5px;
+}
+
+.user-btn {
+  background-color: white;
+  border: 2px solid transparent;
+  padding: 12px 15px;
+  text-align: left;
+  font-weight: 600;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+}
+
+.user-btn:hover {
+  border-color: #56baed;
+  box-shadow: 0 10px 30px rgba(95,186,233,0.4);
+  background-color: #f0f9ff;
+}
+
+.user-btn.selected {
+  background-color: #56baed;
+  color: white;
+  border-color: #56baed;
+  box-shadow: 0 10px 30px rgba(39,109,190,0.6);
+}
+
+.sidebar-footer {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #dce8f1;
+}
+
+.sidebar-profile-pic {
+  width: 45px;
+  height: 45px;
+  border-radius: 50%;
+  border: 2px solid #56baed;
+  object-fit: cover;
+}
+
+.sidebar-username {
+  font-weight: 600;
+  flex-grow: 1;
+}
+
+.settings-btn {
+  background-color: #56baed;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  font-weight: 600;
+  border-radius: 5px;
+  cursor: pointer;
+  box-shadow: 0 10px 30px rgba(95,186,233,0.4);
+  transition: background-color 0.3s ease;
+}
+
+.settings-btn:hover {
+  background-color: #39ace7;
+}
+
+/* --- ANA SOHBET ALANI --- */
+.main-chat {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  background: white;
+}
+
+/* ÜST BAR */
+.chat-header {
+  display: flex;
+  align-items: center;
+  padding: 20px 25px;
+  border-bottom: 1px solid #dce8f1;
+  background: #f6f6f6;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.05);
+}
+
+.chat-user-pic {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  border: 2px solid #56baed;
+  object-fit: cover;
+  margin-right: 20px;
+}
+
+.chat-user-name {
+  font-weight: 700;
+  font-size: 18px;
+  color: #333;
+}
+
+/* MESAJ ALANI */
+.messages-area {
+  flex-grow: 1;
+  padding: 25px;
+  background: #f9faff;
+  overflow-y: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 25px;
+}
+
+/* Mesaj kutuları */
+.message-box {
+  background-color: white;
+  border-radius: 10px;
+  padding: 20px 25px;
+  font-weight: 600;
+  box-shadow: 0 10px 30px rgba(95,186,233,0.1);
+  max-width: 220px;
+  word-wrap: break-word;
+  transition: box-shadow 0.3s ease;
+}
+
+.message-box:hover {
+  box-shadow: 0 15px 40px rgba(39,109,190,0.3);
+}
+
+.message-box.from-me {
+  background-color: #d4f1c5;
+  align-self: flex-end;
+}
+
+.message-box.from-them {
+  background-color: #f1d4d4;
+  align-self: flex-start;
+}
+
+/* MESAJ YAZMA ALANI */
+.chat-input-area {
+  display: flex;
+  padding: 20px 25px;
+  border-top: 1px solid #dce8f1;
+  background: #f6f6f6;
+  gap: 15px;
+}
+
+.chat-input-area input[type="text"] {
+  flex-grow: 1;
+  padding: 14px 20px;
+  border-radius: 50px;
+  border: 2px solid #56baed;
+  font-size: 16px;
+  font-weight: 600;
+  outline: none;
+  transition: all 0.4s ease;
+}
+
+.chat-input-area input[type="text"]:focus {
+  background-color: white;
+  box-shadow: 0 0 10px rgba(39,109,190,0.6);
+  border-color: #39ace7;
+}
+
+.send-btn {
+  background-color: #56baed;
+  border: none;
+  color: white;
+  padding: 0 18px;
+  font-size: 22px;
+  font-weight: 700;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 10px 30px rgba(95,186,233,0.4);
+  transition: background-color 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+}
+
+.send-btn:hover {
+  background-color: #39ace7;
+}
+
+/* Scroll bar (optional) */
+.messages-area::-webkit-scrollbar {
+  width: 8px;
+}
+
+.messages-area::-webkit-scrollbar-thumb {
+  background-color: #56baed;
+  border-radius: 10px;
+}
+
+.messages-area::-webkit-scrollbar-track {
+  background-color: #f0f4ff;
+}
