@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import './Register.css';
+import './Register.module.css';
 import logo from './assets/Logo.png'; // logo dosyasının yolu
 
 function Register({ toggleForm }) {

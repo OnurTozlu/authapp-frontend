@@ -152,3 +152,8 @@ input::placeholder {
   color: #FFFFFF;
 }
 
+#formContent img {
+  animation: fadeIn 1s ease-in-out;
+  border-radius: 30px;
+}
+
