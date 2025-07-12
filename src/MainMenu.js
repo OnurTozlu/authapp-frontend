@@ -12,13 +12,14 @@ function MainMenu({ kullanici }) {
   const [yeniArkadasAdi, setYeniArkadasAdi] = useState('');
   const messagesEndRef = useRef(null);
   const client = useRef(null);
+  const subscriptionRef = useRef(null);
 
   // Arkadaş listesini çek (API) — token eklendi
   useEffect(() => {
     const token = localStorage.getItem('token');
     fetch('http://localhost:8080/api/arkadaslar', {
       headers: {
-        'Authorization': `Bearer ${token}`
+        Authorization: `Bearer ${token}`
       }
     })
       .then(res => res.json())
@@ -32,7 +33,7 @@ function MainMenu({ kullanici }) {
       const token = localStorage.getItem('token');
       fetch(`http://localhost:8080/api/mesajlar?aliciId=${aktifAlici.id}`, {
         headers: {
-          'Authorization': `Bearer ${token}`
+          Authorization: `Bearer ${token}`
         }
       })
         .then(res => res.json())
@@ -50,7 +51,7 @@ function MainMenu({ kullanici }) {
     }
   }, [mesajlar]);
 
-  // WebSocket bağlantısı — connectHeaders içinde token gönderildi
+  // WebSocket client'ını bir kere oluştur
   useEffect(() => {
     const token = localStorage.getItem('token');
 
@@ -61,24 +62,48 @@ function MainMenu({ kullanici }) {
         Authorization: `Bearer ${token}`
       },
       onConnect: () => {
-        if (aktifAlici) {
-          client.current.subscribe(`/topic/messages/${aktifAlici.id}`, (message) => {
-            if (message.body) {
-              const yeniMesaj = JSON.parse(message.body);
-              setMesajlar(prev => [...prev, yeniMesaj]);
-            }
-          });
-        }
+        console.log('WebSocket bağlantısı açıldı');
       },
       onStompError: (frame) => {
-        console.error('STOMP Hatası: ', frame);
+        console.error('STOMP Hatası:', frame);
       }
     });
 
     client.current.activate();
 
     return () => {
-      if (client.current) client.current.deactivate();
+      if (subscriptionRef.current) {
+        subscriptionRef.current.unsubscribe();
+      }
+      if (client.current) {
+        client.current.deactivate();
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Aktif alıcı değiştiğinde ilgili topic’e abone ol
+  useEffect(() => {
+    if (!client.current || !aktifAlici) return;
+
+    if (subscriptionRef.current) {
+      subscriptionRef.current.unsubscribe();
+    }
+
+    subscriptionRef.current = client.current.subscribe(
+      `/topic/messages/${aktifAlici.id}`,
+      (message) => {
+        if (message.body) {
+          const yeniMesaj = JSON.parse(message.body);
+          setMesajlar((prev) => [...prev, yeniMesaj]);
+        }
+      }
+    );
+
+    return () => {
+      if (subscriptionRef.current) {
+        subscriptionRef.current.unsubscribe();
+      }
     };
   }, [aktifAlici]);
 
@@ -108,18 +133,18 @@ function MainMenu({ kullanici }) {
     const token = localStorage.getItem('token');
 
     try {
-      const res = await fetch('http://localhost:8080/api/arkadaslar', {
+      const res = await fetch('http://localhost:8080/api/arkadas', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({ kullaniciAdi: yeniArkadasAdi })
       });
 
       if (res.ok) {
         const yeniArkadas = await res.json();
-        setArkadaslar([...arkadaslar, yeniArkadas]);
+        setArkadaslar((prev) => [...prev, yeniArkadas]);
         setYeniArkadasAdi('');
       } else {
         alert('Arkadaş eklenirken hata oluştu.');
@@ -132,7 +157,10 @@ function MainMenu({ kullanici }) {
   // Zaman formatlama helper
   const formatZaman = (isoString) => {
     const tarih = new Date(isoString);
-    return `${tarih.getHours().toString().padStart(2, '0')}:${tarih.getMinutes().toString().padStart(2, '0')}`;
+    return `${tarih.getHours().toString().padStart(2, '0')}:${tarih
+      .getMinutes()
+      .toString()
+      .padStart(2, '0')}`;
   };
 
   return (
@@ -147,17 +175,21 @@ function MainMenu({ kullanici }) {
             type="text"
             placeholder="Yeni arkadaş adı..."
             value={yeniArkadasAdi}
-            onChange={e => setYeniArkadasAdi(e.target.value)}
+            onChange={(e) => setYeniArkadasAdi(e.target.value)}
             className={styles.addFriendInput}
           />
-          <button onClick={handleYeniArkadasEkle} className={styles.addFriendButton}>Ekle</button>
+          <button onClick={handleYeniArkadasEkle} className={styles.addFriendButton}>
+            Ekle
+          </button>
         </div>
 
         <div className={styles.userList}>
           {arkadaslar.map((arkadas) => (
             <button
               key={arkadas.id}
-              className={`${styles.userButton} ${aktifAlici && aktifAlici.id === arkadas.id ? styles.selected : ''}`}
+              className={`${styles.userButton} ${
+                aktifAlici && aktifAlici.id === arkadas.id ? styles.selected : ''
+              }`}
               onClick={() => setAktifAlici(arkadas)}
             >
               {arkadas.kullaniciAdi}
@@ -195,7 +227,7 @@ function MainMenu({ kullanici }) {
             title="Çıkış Yap"
             onClick={() => {
               localStorage.clear();
-              window.location.href = '/login';  // Login sayfasına yönlendir
+              window.location.href = '/login'; // Login sayfasına yönlendir
             }}
           >
             Çıkış Yap
@@ -206,7 +238,9 @@ function MainMenu({ kullanici }) {
           {mesajlar.map((msg, index) => (
             <div
               key={index}
-              className={`${styles.message} ${msg.gondericiId === kullanici.id ? styles.fromMe : styles.fromThem}`}
+              className={`${styles.message} ${
+                msg.gondericiId === kullanici.id ? styles.fromMe : styles.fromThem
+              }`}
             >
               <div>{msg.icerik}</div>
               <div className={styles.messageTime}>{formatZaman(msg.zaman)}</div>
@@ -224,17 +258,21 @@ function MainMenu({ kullanici }) {
             onChange={(e) => setMesaj(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleMesajGonder()}
           />
-          <button className={styles.sendButton} onClick={handleMesajGonder}>▶</button>
+          <button className={styles.sendButton} onClick={handleMesajGonder}>
+            ▶
+          </button>
         </div>
       </div>
 
       {/* Modal Ayarlar */}
       {modalAcik && (
         <div className={styles.modalOverlay} onClick={() => setModalAcik(false)}>
-          <div className={styles.modalContent} onClick={e => e.stopPropagation()}>
+          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
             <h2>Ayarlar</h2>
             <p>Buraya ayar seçenekleri ekleyebilirsin.</p>
-            <button onClick={() => setModalAcik(false)} className={styles.modalCloseButton}>Kapat</button>
+            <button onClick={() => setModalAcik(false)} className={styles.modalCloseButton}>
+              Kapat
+            </button>
           </div>
         </div>
       )}

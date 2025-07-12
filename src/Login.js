@@ -13,12 +13,14 @@ function Login({ toggleForm, onLoginSuccess }) {
 
   const handleSubmit = async e => {
     e.preventDefault();
-
     try {
-      const response = await fetch('http://localhost:8080/api/kullanici/giris', {
+      const response = await fetch('http://localhost:8080/authapp/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({
+          kullaniciAdi: formData.kullaniciAdi,
+          sifre: formData.sifre
+        })
       });
 
       if (!response.ok) {
@@ -27,25 +29,21 @@ function Login({ toggleForm, onLoginSuccess }) {
       }
 
       const result = await response.json();
+      console.log("Login sonucu:", result);
 
-      // Burada result objesinin içinde token olduğunu varsayıyoruz
       const token = result.token;
-
       if (!token) {
         throw new Error("Token alınamadı");
       }
 
-      // Token'ı localStorage'da sakla
       localStorage.setItem("token", token);
 
-
-      // Ana menüye geçiş için callback, token dahil result'u gönderebilirsin
       onLoginSuccess(result);
 
     } catch (err) {
       alert('Giriş başarısız: ' + err.message);
     }
-  };
+  }
 
   return (
     <div className={styles.container}>
