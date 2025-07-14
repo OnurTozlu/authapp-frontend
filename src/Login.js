@@ -43,7 +43,9 @@ function Login({ toggleForm, onLoginSuccess }) {
     localStorage.setItem("kullanici", JSON.stringify(kullanici));
 
     // App.js ya da üst bileşene state olarak aktar
-    onLoginSuccess({ token, kullanici });
+    //onLoginSuccess({ token, kullanici });
+    onLoginSuccess(kullanici);
+
 
   } catch (err) {
     alert('Giriş başarısız: ' + err.message);
