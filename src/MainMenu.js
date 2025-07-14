@@ -2,6 +2,8 @@ import React, { useEffect, useState, useRef } from 'react';
 import styles from './MainMenu.module.css';
 
 function MainMenu({ kullanici, onLogout }) {
+  console.log("Kullanıcı adı:", kullanici?.kullaniciAdi);
+
   const [arkadaslar, setArkadaslar] = useState([]);
   const [aktifAlici, setAktifAlici] = useState(null);
   const [mesajlar, setMesajlar] = useState([]);
@@ -164,20 +166,23 @@ function MainMenu({ kullanici, onLogout }) {
           ))}
         </div>
 
-        <div className={styles.sidebarFooter}>
-          <div className={styles.currentUser}>
-            <div className={styles.profilePic}></div>
-            <span className={styles.username}>{kullanici.kullaniciAdi}</span>
-          </div>
+<div className={styles.sidebarFooter}>
+  <div className={styles.currentUser}>
+    <div className={styles.profilePic}></div>
+    <span className={styles.username}>
+      {kullanici?.kullaniciAdi}
+    </span>
+  </div>
 
-          <button
-            className={styles.settingsButton}
-            title="Ayarlar"
-            onClick={() => setModalAcik(true)}
-          >
-            ⚙️
-          </button>
-        </div>
+  <button
+    className={styles.settingsButton}
+    title="Ayarlar"
+    onClick={() => setModalAcik(true)}
+  >
+    ⚙️
+  </button>
+</div>
+
       </div>
 
       {/* Chat Container */}

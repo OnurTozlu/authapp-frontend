@@ -12,38 +12,45 @@ function Login({ toggleForm, onLoginSuccess }) {
   };
 
   const handleSubmit = async e => {
-    e.preventDefault();
-    try {
-      const response = await fetch('http://localhost:8080/authapp/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          kullaniciAdi: formData.kullaniciAdi,
-          sifre: formData.sifre
-        })
-      });
+  e.preventDefault();
+  try {
+    const response = await fetch('http://localhost:8080/authapp/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        kullaniciAdi: formData.kullaniciAdi,
+        sifre: formData.sifre
+      })
+    });
 
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error);
-      }
-
-      const result = await response.json();
-      console.log("Login sonucu:", result);
-
-      const token = result.token;
-      if (!token) {
-        throw new Error("Token alınamadı");
-      }
-
-      localStorage.setItem("token", token);
-
-      onLoginSuccess(result);
-
-    } catch (err) {
-      alert('Giriş başarısız: ' + err.message);
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(error);
     }
+
+    const result = await response.json();
+    console.log("Login sonucu:", result); // result.token ve result.kullanici gelmeli
+
+    const token = result.token;
+    const kullanici = result.kullanici;
+
+    if (!token || !kullanici) {
+      throw new Error("Token veya kullanıcı bilgisi alınamadı");
+    }
+
+    // LocalStorage'a her ikisini de kaydet
+    localStorage.setItem("token", token);
+    localStorage.setItem("kullanici", JSON.stringify(kullanici));
+
+    // App.js ya da üst bileşene state olarak aktar
+    onLoginSuccess({ token, kullanici });
+
+  } catch (err) {
+    alert('Giriş başarısız: ' + err.message);
   }
+}
+
+  
 
   return (
     <div className={styles.container}>
