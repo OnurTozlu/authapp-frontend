@@ -16,7 +16,6 @@ function Register({ toggleForm }) {
   const handleChange = (e) => {
     const { name, value } = e.target;
 
-    // Numara sadece rakam ve en fazla 10 karakter
     if (name === 'numara') {
       if (/^\d*$/.test(value) && value.length <= 10) {
         setFormData({ ...formData, [name]: value });
@@ -56,7 +55,7 @@ function Register({ toggleForm }) {
       const response = await fetch('http://localhost:8080/api/kullanici/kayit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'omit', // çerez gönderme
+        credentials: 'omit',
         body: JSON.stringify(payload)
       });
 

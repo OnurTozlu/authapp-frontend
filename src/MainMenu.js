@@ -1,9 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import styles from './MainMenu.module.css';
-import { Client } from '@stomp/stompjs';
-import SockJS from 'sockjs-client';
 
-function MainMenu({ kullanici }) {
+function MainMenu({ kullanici, onLogout }) {
   const [arkadaslar, setArkadaslar] = useState([]);
   const [aktifAlici, setAktifAlici] = useState(null);
   const [mesajlar, setMesajlar] = useState([]);
@@ -11,21 +9,26 @@ function MainMenu({ kullanici }) {
   const [modalAcik, setModalAcik] = useState(false);
   const [yeniArkadasAdi, setYeniArkadasAdi] = useState('');
   const messagesEndRef = useRef(null);
-  const client = useRef(null);
-  const subscriptionRef = useRef(null);
 
   // Arkadaş listesini çek (API) — token eklendi
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    fetch('http://localhost:8080/api/arkadaslar', {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
+  const token = localStorage.getItem('token');
+
+  if (!kullanici || !kullanici.id) return;
+
+  fetch(`http://localhost:8080/api/arkadas/liste?kullaniciId=${kullanici.id}`, {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  })
+    .then(res => {
+      if (!res.ok) throw new Error("İstek başarısız");
+      return res.json();
     })
-      .then(res => res.json())
-      .then(data => setArkadaslar(data))
-      .catch(err => console.error('Arkadaşlar alınamadı', err));
-  }, []);
+    .then(data => setArkadaslar(data))
+    .catch(err => console.error('Arkadaşlar alınamadı', err));
+}, [kullanici]);
+
 
   // Aktif alıcı değiştiğinde o kişinin geçmiş mesajlarını çek (API) — token eklendi
   useEffect(() => {
@@ -51,64 +54,8 @@ function MainMenu({ kullanici }) {
     }
   }, [mesajlar]);
 
-  // WebSocket client'ını bir kere oluştur
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-
-    client.current = new Client({
-      webSocketFactory: () => new SockJS('http://localhost:8080/ws'),
-      reconnectDelay: 5000,
-      connectHeaders: {
-        Authorization: `Bearer ${token}`
-      },
-      onConnect: () => {
-        console.log('WebSocket bağlantısı açıldı');
-      },
-      onStompError: (frame) => {
-        console.error('STOMP Hatası:', frame);
-      }
-    });
-
-    client.current.activate();
-
-    return () => {
-      if (subscriptionRef.current) {
-        subscriptionRef.current.unsubscribe();
-      }
-      if (client.current) {
-        client.current.deactivate();
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Aktif alıcı değiştiğinde ilgili topic’e abone ol
-  useEffect(() => {
-    if (!client.current || !aktifAlici) return;
-
-    if (subscriptionRef.current) {
-      subscriptionRef.current.unsubscribe();
-    }
-
-    subscriptionRef.current = client.current.subscribe(
-      `/topic/messages/${aktifAlici.id}`,
-      (message) => {
-        if (message.body) {
-          const yeniMesaj = JSON.parse(message.body);
-          setMesajlar((prev) => [...prev, yeniMesaj]);
-        }
-      }
-    );
-
-    return () => {
-      if (subscriptionRef.current) {
-        subscriptionRef.current.unsubscribe();
-      }
-    };
-  }, [aktifAlici]);
-
-  // Mesaj gönderme (WebSocket ile)
-  const handleMesajGonder = () => {
+  // Mesaj gönderme (REST API ile)
+  const handleMesajGonder = async () => {
     if (mesaj.trim() === '' || !aktifAlici) return;
 
     const yeniMesaj = {
@@ -118,10 +65,30 @@ function MainMenu({ kullanici }) {
       zaman: new Date().toISOString()
     };
 
-    client.current.publish({
-      destination: '/app/chat.sendMessage',
-      body: JSON.stringify(yeniMesaj)
-    });
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch('http://localhost:8080/api/mesajlar', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(yeniMesaj)
+      });
+
+      if (res.ok) {
+        // Başarılıysa mesajı tekrar çek
+        fetch(`http://localhost:8080/api/mesajlar?aliciId=${aktifAlici.id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+          .then(res => res.json())
+          .then(data => setMesajlar(data));
+      } else {
+        alert('Mesaj gönderilemedi.');
+      }
+    } catch (err) {
+      console.error('Mesaj gönderilemedi', err);
+    }
 
     setMesaj('');
   };
@@ -225,10 +192,7 @@ function MainMenu({ kullanici }) {
           <button
             className={styles.logoutButton}
             title="Çıkış Yap"
-            onClick={() => {
-              localStorage.clear();
-              window.location.href = '/login'; // Login sayfasına yönlendir
-            }}
+            onClick={onLogout}
           >
             Çıkış Yap
           </button>

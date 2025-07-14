@@ -18,7 +18,7 @@ function App() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('token'); // Token’ı sil
+    localStorage.removeItem('token');
     setIsLoggedIn(false);
     setKullanici(null);
     setCurrentForm('login');
