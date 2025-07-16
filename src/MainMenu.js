@@ -140,7 +140,8 @@ function MainMenu({ kullanici, onLogout }) {
   <div className={styles.currentUser}>
     <div className={styles.profilePic}></div>
     <span className={styles.username}>
-      {kullanici?.kullaniciAdi}
+      {(kullanici?.isim && kullanici?.soyisim) && `${kullanici.isim} ${kullanici.soyisim}`}
+
     </span>
   </div>
 
