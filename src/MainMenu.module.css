@@ -8,7 +8,7 @@
   color: #DCDDDE;
 }
 
-/* Sidebar (sol panel) */
+/* Sidebar */
 .sidebar {
   width: 280px;
   background-color: #2F3136;
@@ -66,7 +66,7 @@
 
 .addFriendInput:focus {
   border-color: #7289DA;
-  background-color: #2C2F33;
+  background-color: #2F3133;
 }
 
 .addFriendButton {
@@ -102,6 +102,9 @@
   border-radius: 5px;
   font-weight: 600;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   transition: background-color 0.3s ease-in-out;
 }
 
@@ -112,6 +115,14 @@
 .selected {
   background-color: #7289DA;
   color: white;
+}
+
+/* Kullanıcı avatar */
+.userAvatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
 }
 
 /* Sidebar footer */
@@ -126,14 +137,47 @@
 .currentUser {
   display: flex;
   align-items: center;
+  gap: 10px;
 }
 
 .profilePic {
-  background-color: #7289DA;
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  margin-right: 10px;
+  object-fit: cover;
+}
+
+/* Footer butonları */
+.footerButtons {
+  display: flex;
+  gap: 10px;
+}
+
+/* Bildirim butonu */
+.notificationButton {
+  background: transparent;
+  border: none;
+  color: #DCDDDE;
+  font-size: 24px;
+  position: relative;
+  cursor: pointer;
+  padding: 0;
+}
+
+.notificationButton:hover {
+  color: #7289DA;
+}
+
+.notificationBadge {
+  position: absolute;
+  top: -5px;
+  right: -8px;
+  background-color: #ff5555;
+  color: white;
+  border-radius: 50%;
+  padding: 2px 6px;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 /* Ayarlar butonu */
@@ -142,15 +186,15 @@
   border: none;
   font-size: 24px;
   cursor: pointer;
-  transition: color 0.3s ease-in-out;
   color: #DCDDDE;
+  transition: color 0.3s ease-in-out;
 }
 
 .settingsButton:hover {
   color: #7289DA;
 }
 
-/* Chat container (sağ panel) */
+/* Chat container */
 .chatContainer {
   flex-grow: 1;
   background-color: #2F3136;
@@ -165,14 +209,14 @@
   align-items: center;
   padding: 15px 20px;
   border-bottom: 1px solid #202225;
+  gap: 15px;
 }
 
 .chatProfilePic {
-  background-color: #7289DA;
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  margin-right: 15px;
+  object-fit: cover;
 }
 
 /* Chat username */
@@ -180,6 +224,7 @@
   font-weight: 700;
   font-size: 18px;
   color: #FFFFFF;
+  flex-grow: 1;
 }
 
 /* Mesajlar */
@@ -251,7 +296,7 @@
 }
 
 .messageInput:focus {
-  background-color: #2C2F33;
+  background-color: #2F3136;
   outline: none;
   border: 1px solid #7289DA;
   color: #FFFFFF;
@@ -276,6 +321,19 @@
 
 .sendButton:active {
   transform: scale(0.95);
+}
+
+/* Welcome container (seçili kişi yokken) */
+.welcomeContainer {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: #DCDDDE;
+  font-size: 18px;
+  text-align: center;
+  padding: 40px 20px;
 }
 
 /* Modal overlay ve content */
@@ -319,6 +377,7 @@
   background-color: #5b6eae;
 }
 
+/* Çıkış butonu */
 .logoutButton {
   margin-left: auto;
   background: transparent;
@@ -335,5 +394,3 @@
   background-color: #ff5555;
   color: white;
 }
-
-
