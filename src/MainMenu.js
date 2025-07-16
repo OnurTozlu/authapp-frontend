@@ -12,9 +12,9 @@ function MainMenu({ kullanici, onLogout }) {
   const [bildirimModalAcik, setBildirimModalAcik] = useState(false);
   const [yeniArkadasAdi, setYeniArkadasAdi] = useState('');
   const [aramaTerimi, setAramaTerimi] = useState('');
-  const [bildirimSayisi, setBildirimSayisi] = useState(99);
 
-  // Profil ayarları stateleri
+  const [bekleyenIstekler, setBekleyenIstekler] = useState([]);
+
   const [profilFotoFile, setProfilFotoFile] = useState(null);
   const [profilFotoUrl, setProfilFotoUrl] = useState(kullanici?.profilFotoUrl || DEFAULT_AVATAR);
   const [isim, setIsim] = useState(kullanici?.isim || '');
@@ -24,7 +24,9 @@ function MainMenu({ kullanici, onLogout }) {
   const [mail, setMail] = useState(kullanici?.mail || '');
 
   const messagesEndRef = useRef(null);
+  const bildirimSayisi = bekleyenIstekler.length;
 
+  // Arkadaş listesi yükleme
   useEffect(() => {
     if (!kullanici?.id) return;
     const token = localStorage.getItem('token');
@@ -36,10 +38,23 @@ function MainMenu({ kullanici, onLogout }) {
       .catch(err => console.error('Arkadaşlar alınamadı', err));
   }, [kullanici]);
 
+  // Bekleyen arkadaşlık isteklerini yükleme
+  useEffect(() => {
+    if (!kullanici?.id) return;
+    const token = localStorage.getItem('token');
+    fetch(`http://localhost:8080/authapp/api/arkadas/istekler?alanId=${kullanici.id}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => setBekleyenIstekler(data))
+      .catch(err => console.error('Bekleyen istekler alınamadı', err));
+  }, [kullanici]);
+
+  // Aktif alıcı değişince mesajları yükle
   useEffect(() => {
     if (aktifAlici) {
       const token = localStorage.getItem('token');
-      fetch(`http://localhost:8080/api/mesajlar?aliciId=${aktifAlici.kullaniciId}`, {
+      fetch(`http://localhost:8080/authapp/api/mesajlar?aliciId=${aktifAlici.kullaniciId}`, {
         headers: { Authorization: `Bearer ${token}` }
       })
         .then(res => res.json())
@@ -50,10 +65,12 @@ function MainMenu({ kullanici, onLogout }) {
     }
   }, [aktifAlici]);
 
+  // Mesajlar değişince scroll en alta kaydır
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [mesajlar]);
 
+  // Mesaj gönderme
   const handleMesajGonder = async () => {
     if (mesaj.trim() === '' || !aktifAlici) return;
     const token = localStorage.getItem('token');
@@ -64,7 +81,7 @@ function MainMenu({ kullanici, onLogout }) {
       zaman: new Date().toISOString()
     };
     try {
-      const res = await fetch('http://localhost:8080/api/mesajlar', {
+      const res = await fetch('http://localhost:8080/authapp/api/mesajlar', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -73,7 +90,8 @@ function MainMenu({ kullanici, onLogout }) {
         body: JSON.stringify(yeniMesaj)
       });
       if (res.ok) {
-        const updated = await fetch(`http://localhost:8080/api/mesajlar?aliciId=${aktifAlici.kullaniciId}`, {
+        // Mesajlar güncelle
+        const updated = await fetch(`http://localhost:8080/authapp/api/mesajlar?aliciId=${aktifAlici.kullaniciId}`, {
           headers: { Authorization: `Bearer ${token}` }
         }).then(r => r.json());
         setMesajlar(updated);
@@ -82,10 +100,12 @@ function MainMenu({ kullanici, onLogout }) {
       }
     } catch (err) {
       console.error('Mesaj gönderilemedi', err);
+      alert('Mesaj gönderilemedi, hata oluştu.');
     }
     setMesaj('');
   };
 
+  // Yeni arkadaş ekleme
   const handleYeniArkadasEkle = async () => {
     if (yeniArkadasAdi.trim() === '') return;
     const token = localStorage.getItem('token');
@@ -112,17 +132,48 @@ function MainMenu({ kullanici, onLogout }) {
     }
   };
 
+  // Arkadaşlık isteği durumunu güncelleme (kabul/red)
+  const handleIstegiGuncelle = async (istekId, yeniDurum) => {
+    console.log('İstek güncelleme çağrıldı:', { istekId, yeniDurum });
+    if (!istekId) {
+      console.error('İstek ID boş veya tanımsız!');
+      return;
+    }
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`http://localhost:8080/authapp/api/arkadas/${istekId}/durum?durum=${yeniDurum}`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      if (res.ok) {
+        setBekleyenIstekler(prev => prev.filter(i => i.istekId !== istekId));
+      } else {
+        const errorText = await res.text();
+        console.error('İstek güncellenemedi:', errorText);
+        alert('İstek güncellenemedi.');
+      }
+    } catch (err) {
+      console.error('İstek güncelleme hatası:', err);
+      alert('İstek güncellenirken hata oluştu.');
+    }
+  };
+
+  // Zaman formatlama
   const formatZaman = (isoString) => {
     const tarih = new Date(isoString);
     return `${tarih.getHours().toString().padStart(2, '0')}:${tarih.getMinutes().toString().padStart(2, '0')}`;
   };
 
+  // Arkadaş listesinde arama filtresi
   const filteredArkadaslar = arkadaslar.filter(a =>
     (a.isim + ' ' + a.soyisim).toLowerCase().includes(aramaTerimi.toLowerCase()) ||
     a.kullaniciAdi.toLowerCase().includes(aramaTerimi.toLowerCase())
   );
 
-  // Profil foto değişimi input handler
+  // Profil fotoğrafı seçimi
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -134,7 +185,7 @@ function MainMenu({ kullanici, onLogout }) {
     reader.readAsDataURL(file);
   };
 
-  // Ayarları kaydet
+  // Ayarları kaydetme
   const handleAyarKaydet = async (e) => {
     e.preventDefault();
     const token = localStorage.getItem('token');
@@ -142,13 +193,10 @@ function MainMenu({ kullanici, onLogout }) {
     try {
       let profilFotoUploadUrl = kullanici.profilFotoUrl;
 
-      // Eğer yeni foto yüklendiyse backend'e gönder (örneğin base64 veya FormData)
       if (profilFotoFile) {
-        // Burada backend'e dosya upload yapman gerekir.
-        // Örnek FormData ile upload:
         const formData = new FormData();
         formData.append('profilFoto', profilFotoFile);
-        const resFoto = await fetch(`http://localhost:8080/api/kullanici/${kullanici.id}/uploadProfilFoto`, {
+        const resFoto = await fetch(`http://localhost:8080/authapp/api/kullanici/${kullanici.id}/uploadProfilFoto`, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${token}`
@@ -157,7 +205,7 @@ function MainMenu({ kullanici, onLogout }) {
         });
         if (resFoto.ok) {
           const data = await resFoto.json();
-          profilFotoUploadUrl = data.url; // backend dönen yeni url
+          profilFotoUploadUrl = data.url;
           setProfilFotoUrl(profilFotoUploadUrl);
         } else {
           alert('Profil fotoğrafı yüklenemedi.');
@@ -165,7 +213,6 @@ function MainMenu({ kullanici, onLogout }) {
         }
       }
 
-      // Diğer kullanıcı bilgilerini güncelle
       const guncelKullanici = {
         isim,
         soyisim,
@@ -175,7 +222,7 @@ function MainMenu({ kullanici, onLogout }) {
         profilFotoUrl: profilFotoUploadUrl
       };
 
-      const res = await fetch(`http://localhost:8080/api/kullanici/${kullanici.id}`, {
+      const res = await fetch(`http://localhost:8080/authapp/api/kullanici/${kullanici.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -187,7 +234,7 @@ function MainMenu({ kullanici, onLogout }) {
       if (res.ok) {
         alert('Profil güncellendi.');
         setModalAcik(false);
-        setSifre(''); // şifreyi temizle
+        setSifre('');
       } else {
         alert('Profil güncellenemedi.');
       }
@@ -391,8 +438,32 @@ function MainMenu({ kullanici, onLogout }) {
       {bildirimModalAcik && (
         <div className={styles.modalOverlay} onClick={() => setBildirimModalAcik(false)}>
           <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-            <h2>Bildirimler</h2>
-            <p>Burada bildirimlerin gösterilebilir.</p>
+            <h2>Bekleyen Arkadaşlık İstekleri</h2>
+            {bekleyenIstekler.length === 0 ? (
+              <p>Bekleyen isteğiniz yok.</p>
+            ) : (
+              bekleyenIstekler.map(istek => (
+                <div key={istek.istekId} className={styles.notificationItem}>
+                  <span className={styles.notificationText}>
+                    {istek.gonderenIsimSoyisim} ({istek.gonderenKullaniciAdi})
+                  </span>
+                  <div className={styles.notificationButtons}>
+                    <button
+                      className={styles.acceptButton}
+                      onClick={() => handleIstegiGuncelle(istek.istekId, 1)}
+                    >
+                      Kabul Et
+                    </button>
+                    <button
+                      className={styles.rejectButton}
+                      onClick={() => handleIstegiGuncelle(istek.istekId, 2)}
+                    >
+                      Reddet
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
             <button onClick={() => setBildirimModalAcik(false)} className={styles.modalCloseButton}>Kapat</button>
           </div>
         </div>

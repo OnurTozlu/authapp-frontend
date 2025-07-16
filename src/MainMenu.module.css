@@ -507,3 +507,52 @@
 .saveSettingsButton:hover {
   background-color: #5b6eae;
 }
+
+/* Bildirim modal elemanları */
+
+.notificationItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #202225;
+  padding: 10px 15px;
+  border-radius: 5px;
+  margin-bottom: 10px;
+}
+
+.notificationText {
+  font-weight: 600;
+  color: #DCDDDE;
+}
+
+.notificationButtons {
+  display: flex;
+  gap: 8px;
+}
+
+.acceptButton,
+.rejectButton {
+  border: none;
+  padding: 6px 12px;
+  border-radius: 5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.3s ease-in-out;
+  color: white;
+}
+
+.acceptButton {
+  background-color: #43B581; /* yeşil */
+}
+
+.acceptButton:hover {
+  background-color: #389E6D;
+}
+
+.rejectButton {
+  background-color: #F04747; /* kırmızı */
+}
+
+.rejectButton:hover {
+  background-color: #B93B3B;
+}
