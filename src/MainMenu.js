@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import styles from './MainMenu.module.css';
 
-const DEFAULT_AVATAR = '/assets/Logo.png'; // public klasöründe olmalı
+const DEFAULT_AVATAR = '/assets/Logo.png'; // public/assets klasöründe olmalı
 
 function MainMenu({ kullanici, onLogout }) {
   const [arkadaslar, setArkadaslar] = useState([]);
@@ -12,7 +12,7 @@ function MainMenu({ kullanici, onLogout }) {
   const [bildirimModalAcik, setBildirimModalAcik] = useState(false);
   const [yeniArkadasAdi, setYeniArkadasAdi] = useState('');
   const [aramaTerimi, setAramaTerimi] = useState('');
-  const [bildirimSayisi, setBildirimSayisi] = useState(3); // Örnek bildirim sayısı
+  const [bildirimSayisi, setBildirimSayisi] = useState(99);
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
@@ -108,6 +108,7 @@ function MainMenu({ kullanici, onLogout }) {
   };
 
   const filteredArkadaslar = arkadaslar.filter(a =>
+    (a.isim + ' ' + a.soyisim).toLowerCase().includes(aramaTerimi.toLowerCase()) ||
     a.kullaniciAdi.toLowerCase().includes(aramaTerimi.toLowerCase())
   );
 
@@ -144,7 +145,9 @@ function MainMenu({ kullanici, onLogout }) {
                 alt="Profil"
                 className={styles.userAvatar}
               />
-              {arkadas.kullaniciAdi}
+              {arkadas.isim && arkadas.soyisim
+                ? `${arkadas.isim} ${arkadas.soyisim}`
+                : arkadas.kullaniciAdi}
             </button>
           ))}
         </div>
@@ -157,7 +160,9 @@ function MainMenu({ kullanici, onLogout }) {
               className={styles.profilePic}
             />
             <span className={styles.username}>
-              {(kullanici?.isim && kullanici?.soyisim) ? `${kullanici.isim} ${kullanici.soyisim}` : kullanici?.kullaniciAdi}
+              {(kullanici?.isim && kullanici?.soyisim)
+                ? `${kullanici.isim} ${kullanici.soyisim}`
+                : kullanici?.kullaniciAdi}
             </span>
           </div>
 
@@ -183,13 +188,19 @@ function MainMenu({ kullanici, onLogout }) {
 
       <div className={styles.chatContainer}>
         <div className={styles.chatHeader}>
-          {aktifAlici && <img
-            src={aktifAlici.profilFotoUrl || DEFAULT_AVATAR}
-            alt="Profil"
-            className={styles.chatProfilePic}
-          />}
+          {aktifAlici && (
+            <img
+              src={aktifAlici.profilFotoUrl || DEFAULT_AVATAR}
+              alt="Profil"
+              className={styles.chatProfilePic}
+            />
+          )}
           <span className={styles.chatUsername}>
-            {aktifAlici ? aktifAlici.kullaniciAdi : "Whispry'ye Hoşgeldiniz!"}
+            {aktifAlici
+              ? (aktifAlici.isim && aktifAlici.soyisim
+                  ? `${aktifAlici.isim} ${aktifAlici.soyisim}`
+                  : aktifAlici.kullaniciAdi)
+              : "Whispry'ye Hoşgeldiniz!"}
           </span>
           <button className={styles.logoutButton} onClick={onLogout}>Çıkış Yap</button>
         </div>
