@@ -13,6 +13,16 @@ function MainMenu({ kullanici, onLogout }) {
   const [yeniArkadasAdi, setYeniArkadasAdi] = useState('');
   const [aramaTerimi, setAramaTerimi] = useState('');
   const [bildirimSayisi, setBildirimSayisi] = useState(99);
+
+  // Profil ayarları stateleri
+  const [profilFotoFile, setProfilFotoFile] = useState(null);
+  const [profilFotoUrl, setProfilFotoUrl] = useState(kullanici?.profilFotoUrl || DEFAULT_AVATAR);
+  const [isim, setIsim] = useState(kullanici?.isim || '');
+  const [soyisim, setSoyisim] = useState(kullanici?.soyisim || '');
+  const [kullaniciAdi, setKullaniciAdi] = useState(kullanici?.kullaniciAdi || '');
+  const [sifre, setSifre] = useState('');
+  const [mail, setMail] = useState(kullanici?.mail || '');
+
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
@@ -112,6 +122,81 @@ function MainMenu({ kullanici, onLogout }) {
     a.kullaniciAdi.toLowerCase().includes(aramaTerimi.toLowerCase())
   );
 
+  // Profil foto değişimi input handler
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setProfilFotoFile(file);
+    const reader = new FileReader();
+    reader.onload = () => {
+      setProfilFotoUrl(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Ayarları kaydet
+  const handleAyarKaydet = async (e) => {
+    e.preventDefault();
+    const token = localStorage.getItem('token');
+
+    try {
+      let profilFotoUploadUrl = kullanici.profilFotoUrl;
+
+      // Eğer yeni foto yüklendiyse backend'e gönder (örneğin base64 veya FormData)
+      if (profilFotoFile) {
+        // Burada backend'e dosya upload yapman gerekir.
+        // Örnek FormData ile upload:
+        const formData = new FormData();
+        formData.append('profilFoto', profilFotoFile);
+        const resFoto = await fetch(`http://localhost:8080/api/kullanici/${kullanici.id}/uploadProfilFoto`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`
+          },
+          body: formData
+        });
+        if (resFoto.ok) {
+          const data = await resFoto.json();
+          profilFotoUploadUrl = data.url; // backend dönen yeni url
+          setProfilFotoUrl(profilFotoUploadUrl);
+        } else {
+          alert('Profil fotoğrafı yüklenemedi.');
+          return;
+        }
+      }
+
+      // Diğer kullanıcı bilgilerini güncelle
+      const guncelKullanici = {
+        isim,
+        soyisim,
+        kullaniciAdi,
+        sifre: sifre.trim() === '' ? undefined : sifre,
+        mail,
+        profilFotoUrl: profilFotoUploadUrl
+      };
+
+      const res = await fetch(`http://localhost:8080/api/kullanici/${kullanici.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(guncelKullanici)
+      });
+
+      if (res.ok) {
+        alert('Profil güncellendi.');
+        setModalAcik(false);
+        setSifre(''); // şifreyi temizle
+      } else {
+        alert('Profil güncellenemedi.');
+      }
+    } catch (err) {
+      console.error('Profil güncellenirken hata:', err);
+      alert('Bir hata oluştu.');
+    }
+  };
+
   return (
     <div className={styles.mainContainer}>
       <div className={styles.sidebar}>
@@ -155,14 +240,12 @@ function MainMenu({ kullanici, onLogout }) {
         <div className={styles.sidebarFooter}>
           <div className={styles.currentUser}>
             <img
-              src={kullanici?.profilFotoUrl || DEFAULT_AVATAR}
+              src={profilFotoUrl}
               alt="Profil"
               className={styles.profilePic}
             />
             <span className={styles.username}>
-              {(kullanici?.isim && kullanici?.soyisim)
-                ? `${kullanici.isim} ${kullanici.soyisim}`
-                : kullanici?.kullaniciAdi}
+              {(isim && soyisim) ? `${isim} ${soyisim}` : kullaniciAdi}
             </span>
           </div>
 
@@ -244,7 +327,61 @@ function MainMenu({ kullanici, onLogout }) {
         <div className={styles.modalOverlay} onClick={() => setModalAcik(false)}>
           <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
             <h2>Ayarlar</h2>
-            <p>Buraya ayar seçenekleri ekleyebilirsin.</p>
+            <form className={styles.settingsForm} onSubmit={handleAyarKaydet}>
+              <div className={styles.profilePhotoContainer}>
+                <img
+                  src={profilFotoUrl}
+                  alt="Profil"
+                  className={styles.profilePhotoPreview}
+                />
+                <label htmlFor="fileInput" className={styles.customFileUpload}>Fotoğraf Yükle</label>
+                <input
+                  id="fileInput"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className={styles.profilePhotoInput}
+                />
+              </div>
+
+              <label>İsim</label>
+              <input
+                type="text"
+                value={isim}
+                onChange={e => setIsim(e.target.value)}
+              />
+
+              <label>Soyisim</label>
+              <input
+                type="text"
+                value={soyisim}
+                onChange={e => setSoyisim(e.target.value)}
+              />
+
+              <label>Kullanıcı Adı</label>
+              <input
+                type="text"
+                value={kullaniciAdi}
+                onChange={e => setKullaniciAdi(e.target.value)}
+              />
+
+              <label>Şifre (boş bırakılırsa değişmez)</label>
+              <input
+                type="password"
+                value={sifre}
+                onChange={e => setSifre(e.target.value)}
+              />
+
+              <label>Mail</label>
+              <input
+                type="email"
+                value={mail}
+                onChange={e => setMail(e.target.value)}
+              />
+
+              <button type="submit" className={styles.saveSettingsButton}>Kaydet</button>
+            </form>
+
             <button onClick={() => setModalAcik(false)} className={styles.modalCloseButton}>Kapat</button>
           </div>
         </div>

@@ -147,6 +147,11 @@
   object-fit: cover;
 }
 
+.username {
+  font-weight: 700;
+  font-size: 16px;
+}
+
 /* Footer butonları */
 .footerButtons {
   display: flex;
@@ -234,6 +239,12 @@
   overflow-y: auto;
   background-color: #36393F;
   color: #DCDDDE;
+  scrollbar-width: none; /* Firefox */
+}
+
+.messages::-webkit-scrollbar {
+  width: 0px; /* Safari and Chrome */
+  background: transparent; /* optional: just to hide scrollbar track */
 }
 
 /* Mesaj balonları */
@@ -359,22 +370,32 @@
   width: 90%;
   box-shadow: 0 0 10px rgba(0,0,0,0.8);
   text-align: center;
+  overflow-y: auto;
+  max-height: 90vh;
+  scrollbar-width: none; /* Firefox */
 }
 
+.modalContent::-webkit-scrollbar {
+  width: 0px; /* Safari and Chrome */
+  background: transparent; /* optional: just to hide scrollbar track */
+}
+
+/* Modal kapatma butonu */
 .modalCloseButton {
   margin-top: 20px;
-  padding: 8px 20px;
-  background-color: #7289DA;
+  padding: 10px 20px;
+  background-color: #ff5555;
   border: none;
   color: white;
   border-radius: 5px;
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 700;
+  width: 102%;
   transition: background-color 0.3s ease-in-out;
 }
 
 .modalCloseButton:hover {
-  background-color: #5b6eae;
+  background-color: #cc4444;
 }
 
 /* Çıkış butonu */
@@ -393,4 +414,96 @@
 .logoutButton:hover {
   background-color: #ff5555;
   color: white;
+}
+
+/* Ayarlar form */
+.settingsForm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: left;
+}
+
+.settingsForm label {
+  font-weight: 600;
+  font-size: 14px;
+  margin-top: 10px;
+}
+
+.settingsForm input[type="text"],
+.settingsForm input[type="password"],
+.settingsForm input[type="email"] {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 5px;
+  border: 1px solid #202225;
+  background-color: #202225;
+  color: #DCDDDE;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.3s ease-in-out;
+}
+
+.settingsForm input[type="text"]:focus,
+.settingsForm input[type="password"]:focus,
+.settingsForm input[type="email"]:focus {
+  border-color: #7289DA;
+  background-color: #2F3133;
+  color: white;
+}
+
+/* Profil fotoğrafı yükleme */
+.profilePhotoContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.profilePhotoPreview {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #7289DA;
+  margin-bottom: 8px;
+  background-color: #202225;
+}
+
+.customFileUpload {
+  background-color: #7289DA;
+  color: white;
+  padding: 8px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background-color 0.3s ease-in-out;
+  user-select: none;
+}
+
+.customFileUpload:hover {
+  background-color: #5b6eae;
+}
+
+.profilePhotoInput {
+  display: none;
+}
+
+/* Kaydet butonu */
+.saveSettingsButton {
+  margin-top: 15px;
+  background-color: #7289DA;
+  border: none;
+  color: white;
+  padding: 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 16px;
+  transition: background-color 0.3s ease-in-out;
+  width: 102%;
+}
+
+.saveSettingsButton:hover {
+  background-color: #5b6eae;
 }
