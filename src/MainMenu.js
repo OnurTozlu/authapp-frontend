@@ -136,13 +136,23 @@ function MainMenu({ kullanici, onLogout }) {
           ))}
         </div>
 
-        <div className={styles.sidebarFooter}>
-          <div className={styles.currentUser}>
-            <div className={styles.profilePic}></div>
-            <span className={styles.username}>{kullanici?.kullaniciAdi}</span>
-          </div>
-          <button className={styles.settingsButton} title="Ayarlar" onClick={() => setModalAcik(true)}>⚙️</button>
-        </div>
+<div className={styles.sidebarFooter}>
+  <div className={styles.currentUser}>
+    <div className={styles.profilePic}></div>
+    <span className={styles.username}>
+      {kullanici?.kullaniciAdi}
+    </span>
+  </div>
+
+  <button
+    className={styles.settingsButton}
+    title="Ayarlar"
+    onClick={() => setModalAcik(true)}
+  >
+    ⚙️
+  </button>
+</div>
+
       </div>
 
       <div className={styles.chatContainer}>

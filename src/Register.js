@@ -55,7 +55,7 @@ function Register({ toggleForm }) {
       const response = await fetch('http://localhost:8080/authapp/api/kullanici/kayit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'omit',
+        credentials: "include",
         body: JSON.stringify(payload)
       });
 
