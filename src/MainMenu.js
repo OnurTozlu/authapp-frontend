@@ -120,7 +120,7 @@ function MainMenu({ kullanici, onLogout }) {
       });
       if (res.ok) {
         const yeni = await res.json();
-        setArkadaslar(prev => [...prev, yeni]);
+        //setArkadaslar(prev => [...prev, yeni]);
         setYeniArkadasAdi('');
       } else {
         const hata = await res.json();

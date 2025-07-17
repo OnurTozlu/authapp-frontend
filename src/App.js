@@ -1,41 +1,40 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './Login';
 import Register from './Register';
 import MainMenu from './MainMenu';
 
-function App() {
-  const [currentForm, setCurrentForm] = useState('login');
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [kullanici, setKullanici] = useState(null);
+function AppContent() {
+  const { currentUser, logout, loading } = useAuth();
+  const [currentForm, setCurrentForm] = React.useState('login');
 
   const toggleForm = (formName) => {
     setCurrentForm(formName);
   };
 
-  const handleLoginSuccess = (kullaniciBilgisi) => {
-    setIsLoggedIn(true);
-    setKullanici(kullaniciBilgisi);
-  };
+  if (loading) {
+    // Token doğrulanıyor, bekle
+    return <div>Yükleniyor...</div>;
+  }
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    setIsLoggedIn(false);
-    setKullanici(null);
-    setCurrentForm('login');
-  };
+  if (currentUser) {
+    // Giriş yapılmışsa main menü göster
+    return <MainMenu kullanici={currentUser} onLogout={logout} />;
+  }
 
+  // Giriş yapılmamışsa login veya register formu göster
+  return currentForm === 'login' ? (
+    <Login toggleForm={toggleForm} />
+  ) : (
+    <Register toggleForm={toggleForm} />
+  );
+}
+
+function App() {
   return (
-    <div className="App">
-      {isLoggedIn ? (
-        <MainMenu kullanici={kullanici} onLogout={handleLogout} />
-      ) : (
-        currentForm === 'login' ? (
-          <Login toggleForm={toggleForm} onLoginSuccess={handleLoginSuccess} />
-        ) : (
-          <Register toggleForm={toggleForm} />
-        )
-      )}
-    </div>
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 
