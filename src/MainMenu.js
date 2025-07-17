@@ -26,16 +26,29 @@ function MainMenu({ kullanici, onLogout }) {
   const messagesEndRef = useRef(null);
   const bildirimSayisi = bekleyenIstekler.length;
 
-  // Arkadaş listesi yükleme
-  useEffect(() => {
+  // 1. loadArkadaslar fonksiyonu en üste ekleniyor (useEffect öncesi)
+  const loadArkadaslar = async () => {
     if (!kullanici?.id) return;
     const token = localStorage.getItem('token');
-    fetch(`http://localhost:8080/authapp/api/arkadas/liste?kullaniciId=${kullanici.id}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(res => res.json())
-      .then(data => setArkadaslar(data))
-      .catch(err => console.error('Arkadaşlar alınamadı', err));
+    try {
+      const res = await fetch(`http://localhost:8080/authapp/api/arkadas/liste?kullaniciId=${kullanici.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setArkadaslar(data);
+      } else {
+        console.error('Arkadaş listesi alınamadı.');
+      }
+    } catch (err) {
+      console.error('Arkadaş listesi hatası:', err);
+    }
+  };
+
+
+    // Arkadaş listesi yükleme
+    useEffect(() => {
+    loadArkadaslar();
   }, [kullanici]);
 
   // Bekleyen arkadaşlık isteklerini yükleme
@@ -132,7 +145,7 @@ function MainMenu({ kullanici, onLogout }) {
     }
   };
 
-  // Arkadaşlık isteği durumunu güncelleme (kabul/red)
+    // 3. handleIstegiGuncelle içine güncellenmiş çağrı ekleniyor
   const handleIstegiGuncelle = async (istekId, yeniDurum) => {
     console.log('İstek güncelleme çağrıldı:', { istekId, yeniDurum });
     if (!istekId) {
@@ -148,8 +161,16 @@ function MainMenu({ kullanici, onLogout }) {
           'Content-Type': 'application/json'
         }
       });
+
       if (res.ok) {
+        // İstek listesinden kaldır
         setBekleyenIstekler(prev => prev.filter(i => i.istekId !== istekId));
+
+        // Eğer kabul edildiyse arkadaş listesini güncelle
+        if (yeniDurum === 1) {
+          loadArkadaslar();
+        }
+
       } else {
         const errorText = await res.text();
         console.error('İstek güncellenemedi:', errorText);
