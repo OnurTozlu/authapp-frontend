@@ -1,7 +1,33 @@
 import React, { useEffect, useState, useRef } from 'react';
 import styles from './MainMenu.module.css';
 
-const DEFAULT_AVATAR = '/assets/Logo.png'; // public/assets içinde olmalı
+/**
+ * API kök adresi: .env varsa onu kullan, yoksa fallback.
+ * Örn .env.development içine:
+ *   REACT_APP_API_BASE=http://localhost:8080/authapp
+ */
+const API_BASE = process.env.REACT_APP_API_BASE ?? "http://localhost:8080/authapp";
+
+/** Backend uploads klasöründeki varsayılan avatar */
+const DEFAULT_AVATAR = `${API_BASE}/uploads/Logo.png`;
+
+/**
+ * Görsel URL inşa helper'ı.
+ * - data:... -> direkt
+ * - http... -> direkt
+ * - /uploads/... -> API_BASE + relative
+ * - diğer -> API_BASE + '/' + path
+ */
+function buildImageUrl(path) {
+  if (!path) return DEFAULT_AVATAR;
+  if (typeof path !== 'string') return DEFAULT_AVATAR;
+  const p = path.trim();
+  if (p === '') return DEFAULT_AVATAR;
+  if (p.startsWith('data:')) return p;
+  if (p.startsWith('http://') || p.startsWith('https://')) return p;
+  const rel = p.startsWith('/') ? p : `/${p}`;
+  return `${API_BASE}${rel}`;
+}
 
 function MainMenu({ kullanici, onLogout }) {
   const [arkadaslar, setArkadaslar] = useState([]);
@@ -13,10 +39,10 @@ function MainMenu({ kullanici, onLogout }) {
   const [yeniArkadasAdi, setYeniArkadasAdi] = useState('');
   const [aramaTerimi, setAramaTerimi] = useState('');
   const [bekleyenIstekler, setBekleyenIstekler] = useState([]);
-  const API_BASE = process.env.REACT_APP_API_BASE ?? "http://localhost:8080/authapp";
 
+  // Profil bilgileri
   const [profilFotoFile, setProfilFotoFile] = useState(null);
-  const [profilFotoUrl, setProfilFotoUrl] = useState(kullanici?.profilFotoUrl || DEFAULT_AVATAR);
+  const [profilFotoUrl, setProfilFotoUrl] = useState(kullanici?.profilFotoUrl ?? null);
   const [isim, setIsim] = useState(kullanici?.isim || '');
   const [soyisim, setSoyisim] = useState(kullanici?.soyisim || '');
   const [kullaniciAdi, setKullaniciAdi] = useState(kullanici?.kullaniciAdi || '');
@@ -35,9 +61,10 @@ function MainMenu({ kullanici, onLogout }) {
   const loadArkadaslar = async () => {
     if (!kullanici?.id) return;
     try {
-      const res = await fetch(`http://localhost:8080/authapp/api/arkadas/liste?kullaniciId=${kullanici.id}`, {
-        headers: getAuthHeaders(),
-      });
+      const res = await fetch(
+        `http://localhost:8080/authapp/api/arkadas/liste?kullaniciId=${kullanici.id}`,
+        { headers: getAuthHeaders() }
+      );
       if (res.ok) {
         const data = await res.json();
         setArkadaslar(data);
@@ -53,9 +80,10 @@ function MainMenu({ kullanici, onLogout }) {
   const loadBekleyenIstekler = async () => {
     if (!kullanici?.id) return;
     try {
-      const res = await fetch(`http://localhost:8080/authapp/api/arkadas/istekler?alanId=${kullanici.id}`, {
-        headers: getAuthHeaders(),
-      });
+      const res = await fetch(
+        `http://localhost:8080/authapp/api/arkadas/istekler?alanId=${kullanici.id}`,
+        { headers: getAuthHeaders() }
+      );
       if (res.ok) {
         const data = await res.json();
         setBekleyenIstekler(data);
@@ -74,9 +102,10 @@ function MainMenu({ kullanici, onLogout }) {
       return;
     }
     try {
-      const res = await fetch(`http://localhost:8080/authapp/api/mesajlar?aliciId=${aliciId}`, {
-        headers: getAuthHeaders(),
-      });
+      const res = await fetch(
+        `http://localhost:8080/authapp/api/mesajlar?aliciId=${aliciId}`,
+        { headers: getAuthHeaders() }
+      );
       if (res.ok) {
         const data = await res.json();
         setMesajlar(data);
@@ -90,22 +119,19 @@ function MainMenu({ kullanici, onLogout }) {
     }
   };
 
-  // Component mount ve kullanici değişince arkadaşlar & istekler yükle
+  // Component mount & kullanici değişince
   useEffect(() => {
     loadArkadaslar();
     loadBekleyenIstekler();
   }, [kullanici]);
 
-  // Aktif alıcı değişince mesajları yükle
+  // Aktif alıcı değişince mesajlar
   useEffect(() => {
-    if (aktifAlici) {
-      loadMesajlar(aktifAlici.kullaniciId);
-    } else {
-      setMesajlar([]);
-    }
+    if (aktifAlici) loadMesajlar(aktifAlici.kullaniciId);
+    else setMesajlar([]);
   }, [aktifAlici]);
 
-  // Mesajlar değişince scroll en alta kaydır
+  // Mesajlar değişince scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [mesajlar]);
@@ -170,13 +196,16 @@ function MainMenu({ kullanici, onLogout }) {
   const handleIstegiGuncelle = async (istekId, yeniDurum) => {
     if (!istekId) return;
     try {
-      const res = await fetch(`http://localhost:8080/authapp/api/arkadas/${istekId}/durum?durum=${yeniDurum}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders(),
-        },
-      });
+      const res = await fetch(
+        `http://localhost:8080/authapp/api/arkadas/${istekId}/durum?durum=${yeniDurum}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders(),
+          },
+        }
+      );
       if (res.ok) {
         setBekleyenIstekler((prev) => prev.filter((i) => i.istekId !== istekId));
         if (yeniDurum === 1) loadArkadaslar();
@@ -201,13 +230,13 @@ function MainMenu({ kullanici, onLogout }) {
     a.kullaniciAdi.toLowerCase().includes(aramaTerimi.toLowerCase())
   );
 
-  // Profil foto seçimi
+  // Profil foto seçimi (ayarlar modal) — preview için dataURL
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     setProfilFotoFile(file);
     const reader = new FileReader();
-    reader.onload = () => setProfilFotoUrl(reader.result);
+    reader.onload = () => setProfilFotoUrl(reader.result); // dataURL preview
     reader.readAsDataURL(file);
   };
 
@@ -217,29 +246,44 @@ function MainMenu({ kullanici, onLogout }) {
     let profilFotoUploadUrl = kullanici.profilFotoUrl;
 
     try {
+      // 1) Fotoğraf yüklenecekse
       if (profilFotoFile) {
         const formData = new FormData();
         formData.append('profilFoto', profilFotoFile);
 
-        const resFoto = await fetch(`http://localhost:8080/authapp/api/kullanici/${kullanici.id}/uploadProfilFoto`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-            // Content-Type asla formdata ile manuel setlenmez!
-          },
-          body: formData,
-        });
+        const resFoto = await fetch(
+          `http://localhost:8080/authapp/api/kullanici/${kullanici.id}/uploadProfilFoto`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem('token')}`,
+              // FormData için Content-Type setlenmez
+            },
+            body: formData,
+          }
+        );
 
         if (resFoto.ok) {
-          const data = await resFoto.json();
+          const data = await resFoto.json(); // { url: "/uploads/..." }
           profilFotoUploadUrl = data.url;
-          setProfilFotoUrl(profilFotoUploadUrl);
+          // Cache-bust
+          setProfilFotoUrl(`${profilFotoUploadUrl}?v=${Date.now()}`);
+
+          // Arkadaş listesinde de kendi fotoğrafını güncelle (isteğe bağlı)
+          setArkadaslar((prev) =>
+            prev.map((a) =>
+              a.kullaniciId === kullanici.id
+                ? { ...a, profilFotoUrl: profilFotoUploadUrl }
+                : a
+            )
+          );
         } else {
           alert('Profil fotoğrafı yüklenemedi.');
           return;
         }
       }
 
+      // 2) Kullanıcı bilgilerini güncelle
       const guncelKullanici = {
         isim,
         soyisim,
@@ -249,15 +293,17 @@ function MainMenu({ kullanici, onLogout }) {
         profilFotoUrl: profilFotoUploadUrl,
       };
 
-
-      const res = await fetch(`http://localhost:8080/authapp/api/kullanici/${kullanici.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify(guncelKullanici),
-      });
+      const res = await fetch(
+        `http://localhost:8080/authapp/api/kullanici/${kullanici.id}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+          body: JSON.stringify(guncelKullanici),
+        }
+      );
 
       if (res.ok) {
         alert('Profil güncellendi.');
@@ -305,7 +351,11 @@ function MainMenu({ kullanici, onLogout }) {
               className={`${styles.userButton} ${aktifAlici?.kullaniciId === arkadas.kullaniciId ? styles.selected : ''}`}
               onClick={() => setAktifAlici(arkadas)}
             >
-              <img src={arkadas.profilFotoUrl || DEFAULT_AVATAR} alt="Profil" className={styles.userAvatar} />
+              <img
+                src={buildImageUrl(arkadas.profilFotoUrl)}
+                alt="Profil"
+                className={styles.userAvatar}
+              />
               {arkadas.isim && arkadas.soyisim
                 ? `${arkadas.isim} ${arkadas.soyisim}`
                 : arkadas.kullaniciAdi}
@@ -316,7 +366,7 @@ function MainMenu({ kullanici, onLogout }) {
         <div className={styles.sidebarFooter}>
           <div className={styles.currentUser}>
             <img
-              src={profilFotoUrl ? `${API_BASE}${profilFotoUrl}` : DEFAULT_AVATAR}
+              src={buildImageUrl(profilFotoUrl)}
               alt="Profil"
               className={styles.profilePic}
             />
@@ -324,7 +374,6 @@ function MainMenu({ kullanici, onLogout }) {
               {isim && soyisim ? `${isim} ${soyisim}` : kullaniciAdi}
             </span>
           </div>
-
 
           <div className={styles.footerButtons}>
             <button
@@ -345,7 +394,11 @@ function MainMenu({ kullanici, onLogout }) {
       <div className={styles.chatContainer}>
         <div className={styles.chatHeader}>
           {aktifAlici && (
-            <img src={aktifAlici.profilFotoUrl || DEFAULT_AVATAR} alt="Profil" className={styles.chatProfilePic} />
+            <img
+              src={buildImageUrl(aktifAlici.profilFotoUrl)}
+              alt="Profil"
+              className={styles.chatProfilePic}
+            />
           )}
           <span className={styles.chatUsername}>
             {aktifAlici
@@ -401,7 +454,7 @@ function MainMenu({ kullanici, onLogout }) {
             <form className={styles.settingsForm} onSubmit={handleAyarKaydet}>
               <div className={styles.profilePhotoContainer}>
                 <img
-                  src={profilFotoUrl ? `${API_BASE}${profilFotoUrl}` : DEFAULT_AVATAR}
+                  src={buildImageUrl(profilFotoUrl)}
                   alt="Profil"
                   className={styles.profilePhotoPreview}
                 />
