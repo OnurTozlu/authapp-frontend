@@ -94,7 +94,7 @@ function Login({ toggleForm }) {
           Hesabın yok mu?{' '}
           <span
             onClick={() => toggleForm('register')}
-            style={{ cursor: 'pointer', color: 'blue' }}
+            className={styles.registerLink}
           >
             Kayıt Ol
           </span>
