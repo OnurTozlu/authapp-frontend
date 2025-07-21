@@ -1,26 +1,26 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import { Client } from '@stomp/stompjs';
+import SockJS from 'sockjs-client';
 import styles from './MainMenu.module.css';
 
 /**
  * API kök adresi: .env varsa onu kullan, yoksa fallback.
- * Örn .env.development içine:
- *   REACT_APP_API_BASE=http://localhost:8080/authapp
+ * (.env: REACT_APP_API_BASE=http://localhost:8080/authapp)
  */
-const API_BASE = process.env.REACT_APP_API_BASE ?? "http://localhost:8080/authapp";
+const API_BASE = process.env.REACT_APP_API_BASE ?? 'http://localhost:8080/authapp';
+
+/**
+ * WebSocket endpoint'i: ayrı bir env (REACT_APP_WS_BASE) varsa onu kullan; yoksa API_BASE + /ws.
+ * Backend WebSocketConfig.registerStompEndpoints -> "/ws".
+ */
+const WS_BASE = process.env.REACT_APP_WS_BASE ?? `${API_BASE}/ws`;
 
 /** Backend uploads klasöründeki varsayılan avatar */
 const DEFAULT_AVATAR = `${API_BASE}/uploads/Logo.png`;
 
-/**
- * Görsel URL inşa helper'ı.
- * - data:... -> direkt
- * - http... -> direkt
- * - /uploads/... -> API_BASE + relative
- * - diğer -> API_BASE + '/' + path
- */
+/** Görsel URL inşa helper'ı. */
 function buildImageUrl(path) {
-  if (!path) return DEFAULT_AVATAR;
-  if (typeof path !== 'string') return DEFAULT_AVATAR;
+  if (!path || typeof path !== 'string') return DEFAULT_AVATAR;
   const p = path.trim();
   if (p === '') return DEFAULT_AVATAR;
   if (p.startsWith('data:')) return p;
@@ -29,10 +29,26 @@ function buildImageUrl(path) {
   return `${API_BASE}${rel}`;
 }
 
+/** Mesaj objesini backend/legacy alan adlarına göre normalize et. */
+function normalizeMsg(raw) {
+  const id = raw.id ?? raw.mesajId ?? undefined;
+  const sender = raw.senderId ?? raw.gondericiId ?? raw.gonderenId ?? raw.gonderenID ?? raw.gonderen ?? null;
+  const receiver = raw.receiverId ?? raw.aliciId ?? raw.aliciID ?? raw.alici ?? null;
+  const content = raw.content ?? raw.icerik ?? '';
+  const timestamp = raw.timestamp ?? raw.zaman ?? raw.createdAt ?? null;
+  return {
+    id,
+    senderId: sender != null ? String(sender) : null,
+    receiverId: receiver != null ? String(receiver) : null,
+    content,
+    timestamp,
+  };
+}
+
 function MainMenu({ kullanici, onLogout }) {
   const [arkadaslar, setArkadaslar] = useState([]);
-  const [aktifAlici, setAktifAlici] = useState(null);
-  const [mesajlar, setMesajlar] = useState([]);
+  const [aktifAlici, setAktifAlici] = useState(null); // {kullaniciId, ...}
+  const [mesajlar, setMesajlar] = useState([]); // aktif sohbet mesajları
   const [mesaj, setMesaj] = useState('');
   const [modalAcik, setModalAcik] = useState(false);
   const [bildirimModalAcik, setBildirimModalAcik] = useState(false);
@@ -50,131 +66,244 @@ function MainMenu({ kullanici, onLogout }) {
   const [mail, setMail] = useState(kullanici?.mail || '');
 
   const messagesEndRef = useRef(null);
+
+  /** WebSocket / STOMP client state */
+  const stompClientRef = useRef(null);
+  const [wsConnected, setWsConnected] = useState(false);
+
   const bildirimSayisi = bekleyenIstekler.length;
 
-  // Authorization header helper
-  const getAuthHeaders = () => ({
-    Authorization: `Bearer ${localStorage.getItem('token')}`,
-  });
+  /** JWT header helper */
+  const getAuthHeaders = useCallback(() => {
+    const token = localStorage.getItem('token');
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  }, []);
 
-  // Arkadaş listesi yükle
-  const loadArkadaslar = async () => {
+  /** Ortak fetch helper (auth header otomatik ekler) */
+  const authFetch = useCallback(
+    async (url, options = {}) => {
+      const headers = {
+        ...(options.headers || {}),
+        ...getAuthHeaders(),
+      };
+      return fetch(url, { ...options, headers });
+    },
+    [getAuthHeaders]
+  );
+
+  /** Arkadaş listesi yükle */
+  const loadArkadaslar = useCallback(async () => {
     if (!kullanici?.id) return;
     try {
-      const res = await fetch(
-        `http://localhost:8080/authapp/api/arkadas/liste?kullaniciId=${kullanici.id}`,
-        { headers: getAuthHeaders() }
-      );
+      const res = await authFetch(`${API_BASE}/api/arkadas/liste?kullaniciId=${kullanici.id}`);
       if (res.ok) {
         const data = await res.json();
         setArkadaslar(data);
       } else {
-        console.error('Arkadaş listesi alınamadı.');
+        console.error('Arkadaş listesi alınamadı. Status:', res.status);
       }
-    } catch (error) {
-      console.error('Arkadaş listesi hatası:', error);
+    } catch (err) {
+      console.error('Arkadaş listesi hatası:', err);
     }
-  };
+  }, [kullanici, authFetch]);
 
-  // Bekleyen arkadaşlık isteklerini yükle
-  const loadBekleyenIstekler = async () => {
+  /** Bekleyen arkadaşlık istekleri */
+  const loadBekleyenIstekler = useCallback(async () => {
     if (!kullanici?.id) return;
     try {
-      const res = await fetch(
-        `http://localhost:8080/authapp/api/arkadas/istekler?alanId=${kullanici.id}`,
-        { headers: getAuthHeaders() }
-      );
+      const res = await authFetch(`${API_BASE}/api/arkadas/istekler?alanId=${kullanici.id}`);
       if (res.ok) {
         const data = await res.json();
         setBekleyenIstekler(data);
       } else {
-        console.error('Bekleyen istekler alınamadı.');
+        console.error('Bekleyen istekler alınamadı. Status:', res.status);
       }
-    } catch (error) {
-      console.error('Bekleyen istekler hatası:', error);
+    } catch (err) {
+      console.error('Bekleyen istekler hatası:', err);
     }
-  };
+  }, [kullanici, authFetch]);
 
-  // Mesajları yükle
-  const loadMesajlar = async (aliciId) => {
+  /** Mesajları yükle (aktif alıcıya göre) - REST fallback */
+  const loadMesajlar = useCallback(
+  async (aliciId) => {
     if (!aliciId) {
       setMesajlar([]);
       return;
     }
     try {
-      const res = await fetch(
-        `http://localhost:8080/authapp/api/mesajlar?aliciId=${aliciId}`,
-        { headers: getAuthHeaders() }
-      );
+      const res = await authFetch(`${API_BASE}/api/mesajlar?aliciId=${aliciId}`);
       if (res.ok) {
         const data = await res.json();
-        setMesajlar(data);
+        setMesajlar(Array.isArray(data) ? data.map(normalizeMsg) : []);
       } else {
-        console.error('Mesajlar alınamadı.');
         setMesajlar([]);
       }
-    } catch (error) {
-      console.error('Mesajlar yükleme hatası:', error);
+    } catch (err) {
       setMesajlar([]);
     }
-  };
+  },
+  [authFetch]
+);
 
-  // Component mount & kullanici değişince
+  // Component mount & kullanıcı değişince
   useEffect(() => {
     loadArkadaslar();
     loadBekleyenIstekler();
-  }, [kullanici]);
+  }, [kullanici, loadArkadaslar, loadBekleyenIstekler]);
 
   // Aktif alıcı değişince mesajlar
   useEffect(() => {
-    if (aktifAlici) loadMesajlar(aktifAlici.kullaniciId);
-    else setMesajlar([]);
-  }, [aktifAlici]);
+    if (aktifAlici) {
+      loadMesajlar(aktifAlici.kullaniciId);
+    } else {
+      setMesajlar([]);
+    }
+  }, [aktifAlici, loadMesajlar]);
 
   // Mesajlar değişince scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [mesajlar]);
 
-  // Mesaj gönder
-  const handleMesajGonder = async () => {
-    if (!mesaj.trim() || !aktifAlici) return;
-    const yeniMesaj = {
-      gondericiId: kullanici.id,
-      aliciId: aktifAlici.kullaniciId,
-      icerik: mesaj.trim(),
-      zaman: new Date().toISOString(),
+  /** WebSocket bağlantısı kur */
+  useEffect(() => {
+    if (!kullanici?.id) return; // login yoksa bağlanma
+
+    const token = localStorage.getItem('token');
+
+    const client = new Client({
+      // SockJS factory
+      webSocketFactory: () => new SockJS(WS_BASE),
+      debug: (str) => console.log('[STOMP]', str),
+      reconnectDelay: 5000, // ms
+      connectHeaders: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+
+    client.onConnect = () => {
+      console.log('WebSocket bağlantısı kuruldu');
+      setWsConnected(true);
+
+      // Kullanıcıya özel mesajlar
+      client.subscribe('/user/queue/mesajlar', (frame) => {
+        try {
+          const body = JSON.parse(frame.body);
+          const msg = normalizeMsg(body);
+
+          // Eğer aktif sohbet bu kullanıcıyla ise ekle
+          setMesajlar((prev) => {
+            const aliciIdStr = aktifAlici ? String(aktifAlici.kullaniciId) : null;
+            const myIdStr = String(kullanici.id);
+            const isForActive =
+              aliciIdStr &&
+              (msg.senderId === aliciIdStr || msg.receiverId === aliciIdStr ||
+                // bazı backendler receiver/gonderen swap yapabilir; kontrol geniş
+                (msg.senderId === myIdStr && msg.receiverId === aliciIdStr));
+            return isForActive ? [...prev, msg] : prev;
+          });
+        } catch (e) {
+          console.error('WS mesaj parse hatası:', e);
+        }
+      });
     };
+
+    client.onStompError = (frame) => {
+      console.error('Broker STOMP Hatası:', frame.headers['message'], frame.body);
+    };
+
+    client.onWebSocketClose = () => {
+      console.warn('WebSocket kapandı');
+      setWsConnected(false);
+    };
+
+    client.activate();
+    stompClientRef.current = client;
+
+    return () => {
+      try {
+        client.deactivate();
+      } catch (_) {
+        /* ignore */
+      }
+      stompClientRef.current = null;
+      setWsConnected(false);
+    };
+  }, [kullanici?.id, aktifAlici]); // aktifAlici bağımlılığı: farklı user context'te abonelik filtresini güncel tutmak için state set'te kontrol ediyoruz
+
+  /** WebSocket üzerinden mesaj gönder (varsa), yoksa REST fallback */
+  const sendMessageWS = useCallback(
+    (payload) => {
+      const client = stompClientRef.current;
+      if (!client || !wsConnected) return false;
+      try {
+        client.publish({ destination: '/app/mesaj-gonder', body: JSON.stringify(payload) });
+        return true;
+      } catch (err) {
+        console.error('WS publish hatası:', err);
+        return false;
+      }
+    },
+    [wsConnected]
+  );
+
+  /** Mesaj gönder */
+  const handleMesajGonder = useCallback(async () => {
+    if (!mesaj.trim() || !aktifAlici || !kullanici?.id) return;
+
+    const nowIso = new Date().toISOString();
+    const gonderilecekMesaj = {
+      senderId: String(kullanici.id),
+      receiverId: String(aktifAlici.kullaniciId),
+      content: mesaj.trim(),
+      timestamp: nowIso,
+    };
+
+    // Önce WebSocket dene
+    const wsOk = sendMessageWS(gonderilecekMesaj);
+
+    // Optimistic UI: kullanıcı mesajı hemen görsün
+    if (wsOk) {
+      setMesajlar((prev) => [
+        ...prev,
+        {
+          ...gonderilecekMesaj,
+          id: `tmp-${Date.now()}`,
+        },
+      ]);
+      setMesaj('');
+      return;
+    }
+
+    // WS yoksa REST fallback
     try {
-      const res = await fetch('http://localhost:8080/authapp/api/mesajlar', {
+      const res = await authFetch(`${API_BASE}/api/mesajlar`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...getAuthHeaders(),
         },
-        body: JSON.stringify(yeniMesaj),
+        body: JSON.stringify(gonderilecekMesaj),
       });
       if (res.ok) {
-        await loadMesajlar(aktifAlici.kullaniciId);
+        const saved = normalizeMsg(await res.json());
+        setMesajlar((prev) => [...prev, saved]);
         setMesaj('');
       } else {
+        console.error('Mesaj gönderilemedi. Status:', res.status);
         alert('Mesaj gönderilemedi.');
       }
-    } catch (error) {
-      console.error('Mesaj gönderme hatası:', error);
+    } catch (err) {
+      console.error('Mesaj gönderme hatası:', err);
       alert('Mesaj gönderilemedi, hata oluştu.');
     }
-  };
+  }, [mesaj, aktifAlici, kullanici, sendMessageWS, authFetch]);
 
-  // Yeni arkadaş ekle
-  const handleYeniArkadasEkle = async () => {
+  /** Yeni arkadaş ekle */
+  const handleYeniArkadasEkle = useCallback(async () => {
     if (!yeniArkadasAdi.trim()) return;
     try {
-      const res = await fetch('http://localhost:8080/authapp/api/arkadas', {
+      const res = await authFetch(`${API_BASE}/api/arkadas`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...getAuthHeaders(),
         },
         body: JSON.stringify({ kullaniciAdi: yeniArkadasAdi.trim() }),
       });
@@ -183,52 +312,45 @@ function MainMenu({ kullanici, onLogout }) {
         setYeniArkadasAdi('');
         loadBekleyenIstekler();
       } else {
-        const hata = await res.json();
+        const hata = await res.json().catch(() => ({}));
         alert(hata.mesaj || 'Arkadaş eklenirken hata oluştu.');
       }
-    } catch (error) {
-      console.error('Arkadaş ekleme hatası:', error);
+    } catch (err) {
+      console.error('Arkadaş ekleme hatası:', err);
       alert('Sunucuya bağlanırken hata oluştu.');
     }
-  };
+  }, [yeniArkadasAdi, authFetch, loadBekleyenIstekler]);
 
-  // Arkadaşlık isteği durumunu güncelle
-  const handleIstegiGuncelle = async (istekId, yeniDurum) => {
-    if (!istekId) return;
-    try {
-      const res = await fetch(
-        `http://localhost:8080/authapp/api/arkadas/${istekId}/durum?durum=${yeniDurum}`,
-        {
+  /** Arkadaşlık isteği durumunu güncelle */
+  const handleIstegiGuncelle = useCallback(
+    async (istekId, yeniDurum) => {
+      if (!istekId) return;
+      try {
+        const res = await authFetch(`${API_BASE}/api/arkadas/${istekId}/durum?durum=${yeniDurum}`, {
           method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            ...getAuthHeaders(),
-          },
+          headers: { 'Content-Type': 'application/json' },
+        });
+        if (res.ok) {
+          setBekleyenIstekler((prev) => prev.filter((i) => i.istekId !== istekId));
+          if (yeniDurum === 1) loadArkadaslar();
+        } else {
+          alert('İstek güncellenemedi.');
         }
-      );
-      if (res.ok) {
-        setBekleyenIstekler((prev) => prev.filter((i) => i.istekId !== istekId));
-        if (yeniDurum === 1) loadArkadaslar();
-      } else {
-        alert('İstek güncellenemedi.');
+      } catch (err) {
+        console.error('İstek güncelleme hatası:', err);
+        alert('İstek güncellenirken hata oluştu.');
       }
-    } catch (error) {
-      console.error('İstek güncelleme hatası:', error);
-      alert('İstek güncellenirken hata oluştu.');
-    }
-  };
-
-  // Zaman formatla (HH:mm)
-  const formatZaman = (iso) => {
-    const dt = new Date(iso);
-    return dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
+    },
+    [authFetch, loadArkadaslar]
+  );
 
   // Arkadaş listesi filtreleme
-  const filteredArkadaslar = arkadaslar.filter((a) =>
-    `${a.isim ?? ''} ${a.soyisim ?? ''}`.toLowerCase().includes(aramaTerimi.toLowerCase()) ||
-    a.kullaniciAdi.toLowerCase().includes(aramaTerimi.toLowerCase())
-  );
+  const filteredArkadaslar = useMemo(() => {
+    const term = aramaTerimi.toLowerCase();
+    return arkadaslar.filter((a) =>
+      `${a.isim ?? ''} ${a.soyisim ?? ''}`.toLowerCase().includes(term) || a.kullaniciAdi.toLowerCase().includes(term)
+    );
+  }, [arkadaslar, aramaTerimi]);
 
   // Profil foto seçimi (ayarlar modal) — preview için dataURL
   const handleFileChange = (e) => {
@@ -236,92 +358,96 @@ function MainMenu({ kullanici, onLogout }) {
     if (!file) return;
     setProfilFotoFile(file);
     const reader = new FileReader();
-    reader.onload = () => setProfilFotoUrl(reader.result); // dataURL preview
+    reader.onload = () => setProfilFotoUrl(reader.result);
     reader.readAsDataURL(file);
   };
 
   // Ayarları kaydet
-  const handleAyarKaydet = async (e) => {
-    e.preventDefault();
-    let profilFotoUploadUrl = kullanici.profilFotoUrl;
+  const handleAyarKaydet = useCallback(
+    async (e) => {
+      e.preventDefault();
+      if (!kullanici?.id) return;
 
-    try {
-      // 1) Fotoğraf yüklenecekse
-      if (profilFotoFile) {
-        const formData = new FormData();
-        formData.append('profilFoto', profilFotoFile);
+      let profilFotoUploadUrl = kullanici.profilFotoUrl;
 
-        const resFoto = await fetch(
-          `http://localhost:8080/authapp/api/kullanici/${kullanici.id}/uploadProfilFoto`,
-          {
+      try {
+        // Fotoğraf yükleme
+        if (profilFotoFile) {
+          const formData = new FormData();
+          formData.append('profilFoto', profilFotoFile);
+
+          const resFoto = await authFetch(`${API_BASE}/api/kullanici/${kullanici.id}/uploadProfilFoto`, {
             method: 'POST',
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem('token')}`,
-              // FormData için Content-Type setlenmez
-            },
             body: formData,
+          });
+
+          if (resFoto.ok) {
+            const data = await resFoto.json(); // { url: "/uploads/..." }
+            profilFotoUploadUrl = data.url;
+            setProfilFotoUrl(`${profilFotoUploadUrl}?v=${Date.now()}`); // cache-bust
+
+            setArkadaslar((prev) =>
+              prev.map((a) => (a.kullaniciId === kullanici.id ? { ...a, profilFotoUrl: profilFotoUploadUrl } : a))
+            );
+          } else {
+            alert('Profil fotoğrafı yüklenemedi.');
+            return;
           }
-        );
-
-        if (resFoto.ok) {
-          const data = await resFoto.json(); // { url: "/uploads/..." }
-          profilFotoUploadUrl = data.url;
-          // Cache-bust
-          setProfilFotoUrl(`${profilFotoUploadUrl}?v=${Date.now()}`);
-
-          // Arkadaş listesinde de kendi fotoğrafını güncelle (isteğe bağlı)
-          setArkadaslar((prev) =>
-            prev.map((a) =>
-              a.kullaniciId === kullanici.id
-                ? { ...a, profilFotoUrl: profilFotoUploadUrl }
-                : a
-            )
-          );
-        } else {
-          alert('Profil fotoğrafı yüklenemedi.');
-          return;
         }
-      }
 
-      // 2) Kullanıcı bilgilerini güncelle
-      const guncelKullanici = {
-        isim,
-        soyisim,
-        kullaniciAdi,
-        ...(sifre.trim() !== '' && { sifre }),
-        mail,
-        profilFotoUrl: profilFotoUploadUrl,
-      };
+        // Kullanıcı bilgileri güncelle
+        const guncelKullanici = {
+          isim,
+          soyisim,
+          kullaniciAdi,
+          ...(sifre.trim() !== '' && { sifre }),
+          mail,
+          profilFotoUrl: profilFotoUploadUrl,
+        };
 
-      const res = await fetch(
-        `http://localhost:8080/authapp/api/kullanici/${kullanici.id}`,
-        {
+        const res = await authFetch(`${API_BASE}/api/kullanici/${kullanici.id}`, {
           method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(guncelKullanici),
-        }
-      );
+        });
 
-      if (res.ok) {
-        alert('Profil güncellendi.');
-        setModalAcik(false);
-        setSifre('');
-      } else {
-        const hata = await res.text();
-        console.error('Profil güncelleme hatası:', hata);
-        alert('Profil güncellenemedi.');
+        if (res.ok) {
+          alert('Profil güncellendi.');
+          setModalAcik(false);
+          setSifre('');
+        } else {
+          const hata = await res.text();
+          console.error('Profil güncelleme hatası:', hata);
+          alert('Profil güncellenemedi.');
+        }
+      } catch (err) {
+        console.error('Profil güncelleme sırasında hata:', err);
+        alert('Bir hata oluştu.');
       }
-    } catch (error) {
-      console.error('Profil güncelleme sırasında hata:', error);
-      alert('Bir hata oluştu.');
+    },
+    [profilFotoFile, kullanici, isim, soyisim, kullaniciAdi, sifre, mail, authFetch]
+  );
+
+  /** Resim hata fallback */
+  const handleImageError = (e) => {
+    if (e.currentTarget.src !== DEFAULT_AVATAR) {
+      e.currentTarget.src = DEFAULT_AVATAR;
     }
   };
 
+  /** Zaman formatla (HH:mm) */
+  const formatZaman = (iso) => {
+    if (!iso) return '';
+    const dt = new Date(iso);
+    if (Number.isNaN(dt.getTime())) return '';
+    return dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const myIdStr = String(kullanici?.id ?? '');
+
   return (
     <div className={styles.mainContainer}>
+      {/* SOL SİDEBAR */}
       <div className={styles.sidebar}>
         <input
           type="text"
@@ -355,10 +481,9 @@ function MainMenu({ kullanici, onLogout }) {
                 src={buildImageUrl(arkadas.profilFotoUrl)}
                 alt="Profil"
                 className={styles.userAvatar}
+                onError={handleImageError}
               />
-              {arkadas.isim && arkadas.soyisim
-                ? `${arkadas.isim} ${arkadas.soyisim}`
-                : arkadas.kullaniciAdi}
+              {arkadas.isim && arkadas.soyisim ? `${arkadas.isim} ${arkadas.soyisim}` : arkadas.kullaniciAdi}
             </button>
           ))}
         </div>
@@ -369,6 +494,7 @@ function MainMenu({ kullanici, onLogout }) {
               src={buildImageUrl(profilFotoUrl)}
               alt="Profil"
               className={styles.profilePic}
+              onError={handleImageError}
             />
             <span className={styles.username}>
               {isim && soyisim ? `${isim} ${soyisim}` : kullaniciAdi}
@@ -388,9 +514,14 @@ function MainMenu({ kullanici, onLogout }) {
               ⚙️
             </button>
           </div>
+          {/* WS durum göstergesi (isteğe bağlı) */}
+          <div className={styles.wsStatus} title={wsConnected ? 'Canlı bağlandı' : 'Bağlı değil'}>
+            {wsConnected ? '● Online' : '○ Offline'}
+          </div>
         </div>
       </div>
 
+      {/* SAĞ CHAT ALANI */}
       <div className={styles.chatContainer}>
         <div className={styles.chatHeader}>
           {aktifAlici && (
@@ -398,6 +529,7 @@ function MainMenu({ kullanici, onLogout }) {
               src={buildImageUrl(aktifAlici.profilFotoUrl)}
               alt="Profil"
               className={styles.chatProfilePic}
+              onError={handleImageError}
             />
           )}
           <span className={styles.chatUsername}>
@@ -414,15 +546,18 @@ function MainMenu({ kullanici, onLogout }) {
 
         {aktifAlici ? (
           <div className={styles.messages}>
-            {mesajlar.map((msg, index) => (
-              <div
-                key={index}
-                className={`${styles.message} ${msg.gondericiId === kullanici.id ? styles.fromMe : styles.fromThem}`}
-              >
-                <div>{msg.icerik}</div>
-                <div className={styles.messageTime}>{formatZaman(msg.zaman)}</div>
-              </div>
-            ))}
+            {mesajlar.map((msg, index) => {
+              const fromMe = msg.senderId === myIdStr;
+              return (
+                <div
+                  key={msg.id ?? index}
+                  className={`${styles.message} ${fromMe ? styles.fromMe : styles.fromThem}`}
+                >
+                  <div>{msg.content}</div>
+                  <div className={styles.messageTime}>{formatZaman(msg.timestamp)}</div>
+                </div>
+              );
+            })}
             <div ref={messagesEndRef} />
           </div>
         ) : (
@@ -457,75 +592,76 @@ function MainMenu({ kullanici, onLogout }) {
                   src={buildImageUrl(profilFotoUrl)}
                   alt="Profil"
                   className={styles.profilePhotoPreview}
+                  onError={handleImageError}
                 />
-                <label htmlFor="fileInput" className={styles.customFileUpload}>
-                  Fotoğraf Yükle
+                <label htmlFor="fileInput" className={styles.uploadLabel}>
+                  Fotoğraf Değiştir
                 </label>
                 <input
                   id="fileInput"
                   type="file"
                   accept="image/*"
+                  style={{ display: 'none' }}
                   onChange={handleFileChange}
-                  className={styles.profilePhotoInput}
                 />
               </div>
 
               <label>İsim</label>
-              <input type="text" value={isim} onChange={(e) => setIsim(e.target.value)} />
+              <input value={isim} onChange={(e) => setIsim(e.target.value)} />
 
               <label>Soyisim</label>
-              <input type="text" value={soyisim} onChange={(e) => setSoyisim(e.target.value)} />
+              <input value={soyisim} onChange={(e) => setSoyisim(e.target.value)} />
 
               <label>Kullanıcı Adı</label>
-              <input type="text" value={kullaniciAdi} onChange={(e) => setKullaniciAdi(e.target.value)} />
+              <input value={kullaniciAdi} onChange={(e) => setKullaniciAdi(e.target.value)} />
 
               <label>Şifre (boş bırakılırsa değişmez)</label>
               <input type="password" value={sifre} onChange={(e) => setSifre(e.target.value)} />
 
               <label>Mail</label>
-              <input type="email" value={mail} onChange={(e) => setMail(e.target.value)} />
+              <input value={mail} onChange={(e) => setMail(e.target.value)} />
 
-              <button type="submit" className={styles.saveSettingsButton}>
-                Kaydet
-              </button>
+              <div className={styles.modalButtons}>
+                <button type="submit" className={styles.saveButton}>
+                  Kaydet
+                </button>
+                <button type="button" onClick={() => setModalAcik(false)} className={styles.cancelButton}>
+                  İptal
+                </button>
+              </div>
             </form>
-
-            <button onClick={() => setModalAcik(false)} className={styles.modalCloseButton}>
-              Kapat
-            </button>
           </div>
         </div>
       )}
 
-      {/* Bildirimler modal */}
+      {/* Bildirim modal */}
       {bildirimModalAcik && (
         <div className={styles.modalOverlay} onClick={() => setBildirimModalAcik(false)}>
           <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
             <h2>Bekleyen Arkadaşlık İstekleri</h2>
-            {bekleyenIstekler.length === 0 ? (
-              <p>Bekleyen isteğiniz yok.</p>
-            ) : (
-              bekleyenIstekler.map((istek) => (
-                <div key={istek.istekId} className={styles.notificationItem}>
-                  <span className={styles.notificationText}>
-                    {istek.gonderenIsimSoyisim} ({istek.gonderenKullaniciAdi})
-                  </span>
-                  <button
-                    onClick={() => handleIstegiGuncelle(istek.istekId, 1)}
-                    className={styles.acceptButton}
-                  >
-                    Kabul Et
-                  </button>
-                  <button
-                    onClick={() => handleIstegiGuncelle(istek.istekId, 2)}
-                    className={styles.rejectButton}
-                  >
-                    Reddet
-                  </button>
-                </div>
-              ))
-            )}
-            <button onClick={() => setBildirimModalAcik(false)} className={styles.modalCloseButton}>
+            {bekleyenIstekler.length === 0 && <p>Yeni arkadaşlık isteğiniz yok.</p>}
+            <ul className={styles.requestList}>
+              {bekleyenIstekler.map((istek) => (
+                <li key={istek.istekId} className={styles.requestItem}>
+                  <span>{istek.gonderenAdi ?? istek.kullaniciAdi}</span>
+                  <div>
+                    <button
+                      className={styles.acceptButton}
+                      onClick={() => handleIstegiGuncelle(istek.istekId, 1)}
+                    >
+                      Kabul Et
+                    </button>
+                    <button
+                      className={styles.rejectButton}
+                      onClick={() => handleIstegiGuncelle(istek.istekId, 2)}
+                    >
+                      Reddet
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <button className={styles.closeButton} onClick={() => setBildirimModalAcik(false)}>
               Kapat
             </button>
           </div>
