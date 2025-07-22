@@ -3,39 +3,39 @@ import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 import styles from './MainMenu.module.css';
 
-/**
- * API kök adresi: .env varsa onu kullan, yoksa fallback.
- * (.env: REACT_APP_API_BASE=http://localhost:8080/authapp)
- */
+/** **********************************************************************************************
+ * MainMenu.jsx – Whispry Chat Ana Ekranı (FINAL)
+ *
+ * Güncellemeler:
+ *  • Ayarlar (Settings) modalı: max-width / max-height, scroll, mobil uyum, görsel önizleme, güvenli kapatma.
+ *  • Bildirimler (Arkadaşlık İstekleri) modalı: uzun listelerde scroll, dar ekranlarda kırılmayı önleme.
+ *  • WS + REST fallback mantığı korunup sadeleştirildi.
+ *  • Dupe-önleme cache'i korundu.
+ *  • Görsel URL sağlamlaştırıldı.
+ *
+ * Backend varsayımları:
+ *  ChatStompController -> @MessageMapping("/chat.sendMessage") publish dest '/app/chat.sendMessage'.
+ *  convertAndSendToUser(..., "/queue/messages", ...) -> kullanıcıya özel abonelik '/user/queue/messages'.
+ *************************************************************************************************/
+
+/** API kök adresi (.env override) */
 const API_BASE = process.env.REACT_APP_API_BASE ?? 'http://localhost:8080/authapp';
-
-/**
- * WebSocket endpoint'i: ayrı bir env (REACT_APP_WS_BASE) varsa onu kullan; yoksa API_BASE + /ws.
- * Backend WebSocketConfig.registerStompEndpoints -> "/ws".
- */
+/** WS endpoint (.env override) */
 const WS_BASE = process.env.REACT_APP_WS_BASE ?? `${API_BASE}/ws`;
-
-/** Backend uploads klasöründeki varsayılan avatar */
+/** Varsayılan avatar */
 const DEFAULT_AVATAR = `${API_BASE}/uploads/Logo.png`;
+/** STOMP destinasyonları */
+const STOMP_DEST_SEND = '/app/chat.sendMessage';
+const STOMP_SUB_USER = '/user/queue/messages';
+const STOMP_SUB_PUBLIC = '/topic/public'; // opsiyonel genel kanal
 
-/** Görsel URL inşa helper'ı. */
-function buildImageUrl(path) {
-  if (!path || typeof path !== 'string') return DEFAULT_AVATAR;
-  const p = path.trim();
-  if (p === '') return DEFAULT_AVATAR;
-  if (p.startsWith('data:')) return p;
-  if (p.startsWith('http://') || p.startsWith('https://')) return p;
-  const rel = p.startsWith('/') ? p : `/${p}`;
-  return `${API_BASE}${rel}`;
-}
-
-/** Mesaj objesini backend/legacy alan adlarına göre normalize et. */
+/** Mesaj objesini normalize et (backend/legacy alan adları) */
 function normalizeMsg(raw) {
-  const id = raw.id ?? raw.mesajId ?? undefined;
-  const sender = raw.senderId ?? raw.gondericiId ?? raw.gonderenId ?? raw.gonderenID ?? raw.gonderen ?? null;
-  const receiver = raw.receiverId ?? raw.aliciId ?? raw.aliciID ?? raw.alici ?? null;
-  const content = raw.content ?? raw.icerik ?? '';
-  const timestamp = raw.timestamp ?? raw.zaman ?? raw.createdAt ?? null;
+  const id = raw?.id ?? raw?.mesajId ?? undefined;
+  const sender = raw?.senderId ?? raw?.gondericiId ?? raw?.gonderenId ?? raw?.gonderenID ?? raw?.gonderen ?? null;
+  const receiver = raw?.receiverId ?? raw?.aliciId ?? raw?.aliciID ?? raw?.alici ?? null;
+  const content = raw?.content ?? raw?.icerik ?? '';
+  const timestamp = raw?.timestamp ?? raw?.zaman ?? raw?.createdAt ?? null;
   return {
     id,
     senderId: sender != null ? String(sender) : null,
@@ -45,13 +45,21 @@ function normalizeMsg(raw) {
   };
 }
 
+/** Optimistic mesaj cache key */
+function makeLocalKey(senderId, receiverId, content, timestamp) {
+  return `${senderId || ''}|${receiverId || ''}|${content}|${timestamp || ''}`;
+}
+
 function MainMenu({ kullanici, onLogout }) {
+  /* ------------------------------------------------------------------
+   * State
+   * ---------------------------------------------------------------- */
   const [arkadaslar, setArkadaslar] = useState([]);
   const [aktifAlici, setAktifAlici] = useState(null); // {kullaniciId, ...}
-  const [mesajlar, setMesajlar] = useState([]); // aktif sohbet mesajları
+  const [mesajlar, setMesajlar] = useState([]);       // aktif sohbet mesajları
   const [mesaj, setMesaj] = useState('');
-  const [modalAcik, setModalAcik] = useState(false);
-  const [bildirimModalAcik, setBildirimModalAcik] = useState(false);
+  const [modalAcik, setModalAcik] = useState(false);  // Ayarlar modalı
+  const [bildirimModalAcik, setBildirimModalAcik] = useState(false); // Bekleyen istekler modalı
   const [yeniArkadasAdi, setYeniArkadasAdi] = useState('');
   const [aramaTerimi, setAramaTerimi] = useState('');
   const [bekleyenIstekler, setBekleyenIstekler] = useState([]);
@@ -65,33 +73,63 @@ function MainMenu({ kullanici, onLogout }) {
   const [sifre, setSifre] = useState('');
   const [mail, setMail] = useState(kullanici?.mail || '');
 
-  const messagesEndRef = useRef(null);
-
-  /** WebSocket / STOMP client state */
-  const stompClientRef = useRef(null);
+  // WS durumu
   const [wsConnected, setWsConnected] = useState(false);
+
+  // Refs
+  const messagesEndRef = useRef(null);
+  const stompClientRef = useRef(null);
+  const aktifAliciIdRef = useRef(null); // STOMP callback'lerinde aktif alıcıyı yakalamak için
+  const localMsgCacheRef = useRef(new Set()); // dupe önleme
+
+  // Aktif alıcı ref eşitle
+  useEffect(() => {
+    aktifAliciIdRef.current = aktifAlici?.kullaniciId ?? null;
+  }, [aktifAlici]);
 
   const bildirimSayisi = bekleyenIstekler.length;
 
-  /** JWT header helper */
+  /* ------------------------------------------------------------------
+   * Auth Header + Fetch helper
+   * ---------------------------------------------------------------- */
   const getAuthHeaders = useCallback(() => {
     const token = localStorage.getItem('token');
     return token ? { Authorization: `Bearer ${token}` } : {};
   }, []);
 
-  /** Ortak fetch helper (auth header otomatik ekler) */
   const authFetch = useCallback(
     async (url, options = {}) => {
-      const headers = {
-        ...(options.headers || {}),
-        ...getAuthHeaders(),
-      };
+      const headers = { ...(options.headers || {}), ...getAuthHeaders() };
       return fetch(url, { ...options, headers });
     },
     [getAuthHeaders]
   );
 
-  /** Arkadaş listesi yükle */
+  /* ------------------------------------------------------------------
+   * Yardımcılar
+   * ---------------------------------------------------------------- */
+  function buildImageUrl(path) {
+    if (!path || typeof path !== 'string') return DEFAULT_AVATAR;
+    const p = path.trim();
+    if (!p) return DEFAULT_AVATAR;
+    if (p.startsWith('data:')) return p;
+    if (p.startsWith('http://') || p.startsWith('https://')) return p;
+    const rel = p.startsWith('/') ? p : `/${p}`;
+    return `${API_BASE}${rel}`;
+  }
+
+  const formatZaman = (iso) => {
+    if (!iso) return '';
+    const dt = new Date(iso);
+    if (Number.isNaN(dt.getTime())) return '';
+    return dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const myIdStr = String(kullanici?.id ?? '');
+
+  /* ------------------------------------------------------------------
+   * Data yükleyiciler
+   * ---------------------------------------------------------------- */
   const loadArkadaslar = useCallback(async () => {
     if (!kullanici?.id) return;
     try {
@@ -107,7 +145,6 @@ function MainMenu({ kullanici, onLogout }) {
     }
   }, [kullanici, authFetch]);
 
-  /** Bekleyen arkadaşlık istekleri */
   const loadBekleyenIstekler = useCallback(async () => {
     if (!kullanici?.id) return;
     try {
@@ -123,9 +160,7 @@ function MainMenu({ kullanici, onLogout }) {
     }
   }, [kullanici, authFetch]);
 
-  /** Mesajları yükle (aktif alıcıya göre) - REST fallback */
-  const loadMesajlar = useCallback(
-  async (aliciId) => {
+  const loadMesajlar = useCallback(async (aliciId) => {
     if (!aliciId) {
       setMesajlar([]);
       return;
@@ -134,48 +169,60 @@ function MainMenu({ kullanici, onLogout }) {
       const res = await authFetch(`${API_BASE}/api/mesajlar?aliciId=${aliciId}`);
       if (res.ok) {
         const data = await res.json();
-        setMesajlar(Array.isArray(data) ? data.map(normalizeMsg) : []);
+        const norm = Array.isArray(data) ? data.map(normalizeMsg) : [];
+        setMesajlar(norm);
+        const cache = new Set();
+        norm.forEach((m) => cache.add(makeLocalKey(m.senderId, m.receiverId, m.content, m.timestamp)));
+        localMsgCacheRef.current = cache;
       } else {
+        console.error('Mesajlar alınamadı. Status:', res.status);
         setMesajlar([]);
       }
     } catch (err) {
+      console.error('Mesajlar çekilirken hata:', err);
       setMesajlar([]);
     }
-  },
-  [authFetch]
-);
+  }, [authFetch]);
 
-  // Component mount & kullanıcı değişince
+  /* İlk yükleme */
   useEffect(() => {
     loadArkadaslar();
     loadBekleyenIstekler();
   }, [kullanici, loadArkadaslar, loadBekleyenIstekler]);
 
-  // Aktif alıcı değişince mesajlar
+  /* Aktif alıcı değişince mesajlar */
   useEffect(() => {
     if (aktifAlici) {
       loadMesajlar(aktifAlici.kullaniciId);
     } else {
       setMesajlar([]);
+      localMsgCacheRef.current = new Set();
     }
   }, [aktifAlici, loadMesajlar]);
 
-  // Mesajlar değişince scroll
+  /* Mesajlar değişince otomatik scroll */
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [mesajlar]);
 
-  /** WebSocket bağlantısı kur */
+  /* ------------------------------------------------------------------
+   * WebSocket / STOMP
+   * ---------------------------------------------------------------- */
   useEffect(() => {
     if (!kullanici?.id) return; // login yoksa bağlanma
 
     const token = localStorage.getItem('token');
 
+    // Önce eski client'ı kapat
+    if (stompClientRef.current) {
+      try { stompClientRef.current.deactivate(); } catch (_) {}
+      stompClientRef.current = null;
+    }
+
     const client = new Client({
-      // SockJS factory
       webSocketFactory: () => new SockJS(WS_BASE),
       debug: (str) => console.log('[STOMP]', str),
-      reconnectDelay: 5000, // ms
+      reconnectDelay: 5000,
       connectHeaders: token ? { Authorization: `Bearer ${token}` } : {},
     });
 
@@ -184,24 +231,41 @@ function MainMenu({ kullanici, onLogout }) {
       setWsConnected(true);
 
       // Kullanıcıya özel mesajlar
-      client.subscribe('/user/queue/mesajlar', (frame) => {
+      client.subscribe(STOMP_SUB_USER, (frame) => {
         try {
           const body = JSON.parse(frame.body);
           const msg = normalizeMsg(body);
+          const aktifId = aktifAliciIdRef.current ? String(aktifAliciIdRef.current) : null;
+          const myIdStr = String(kullanici.id);
 
-          // Eğer aktif sohbet bu kullanıcıyla ise ekle
-          setMesajlar((prev) => {
-            const aliciIdStr = aktifAlici ? String(aktifAlici.kullaniciId) : null;
-            const myIdStr = String(kullanici.id);
-            const isForActive =
-              aliciIdStr &&
-              (msg.senderId === aliciIdStr || msg.receiverId === aliciIdStr ||
-                // bazı backendler receiver/gonderen swap yapabilir; kontrol geniş
-                (msg.senderId === myIdStr && msg.receiverId === aliciIdStr));
-            return isForActive ? [...prev, msg] : prev;
-          });
+          const isForActive =
+            aktifId && (
+              msg.senderId === aktifId ||
+              msg.receiverId === aktifId ||
+              (msg.senderId === myIdStr && msg.receiverId === aktifId) ||
+              (msg.senderId === aktifId && msg.receiverId === myIdStr)
+            );
+
+          const key = makeLocalKey(msg.senderId, msg.receiverId, msg.content, msg.timestamp);
+          if (!localMsgCacheRef.current.has(key)) {
+            localMsgCacheRef.current.add(key);
+            if (isForActive) {
+              setMesajlar((prev) => [...prev, msg]);
+            }
+          }
         } catch (e) {
           console.error('WS mesaj parse hatası:', e);
+        }
+      });
+
+      // (Opsiyonel) Genel kanal
+      client.subscribe(STOMP_SUB_PUBLIC, (frame) => {
+        try {
+          const body = JSON.parse(frame.body);
+          const msg = normalizeMsg(body);
+          console.log('Genel kanal mesajı:', msg);
+        } catch (e) {
+          console.error('Public WS parse hatası:', e);
         }
       });
     };
@@ -219,73 +283,72 @@ function MainMenu({ kullanici, onLogout }) {
     stompClientRef.current = client;
 
     return () => {
-      try {
-        client.deactivate();
-      } catch (_) {
-        /* ignore */
-      }
+      try { client.deactivate(); } catch (_) {}
       stompClientRef.current = null;
       setWsConnected(false);
     };
-  }, [kullanici?.id, aktifAlici]); // aktifAlici bağımlılığı: farklı user context'te abonelik filtresini güncel tutmak için state set'te kontrol ediyoruz
+  }, [kullanici?.id]);
 
-  /** WebSocket üzerinden mesaj gönder (varsa), yoksa REST fallback */
-  const sendMessageWS = useCallback(
-    (payload) => {
-      const client = stompClientRef.current;
-      if (!client || !wsConnected) return false;
-      try {
-        client.publish({ destination: '/app/mesaj-gonder', body: JSON.stringify(payload) });
-        return true;
-      } catch (err) {
-        console.error('WS publish hatası:', err);
-        return false;
-      }
-    },
-    [wsConnected]
-  );
+  /* ------------------------------------------------------------------
+   * Mesaj Gönderme
+   * ---------------------------------------------------------------- */
+  const sendMessageWS = useCallback((payload) => {
+    const client = stompClientRef.current;
+    if (!client || !wsConnected) return false;
+    try {
+      client.publish({ destination: STOMP_DEST_SEND, body: JSON.stringify(payload) });
+      return true;
+    } catch (err) {
+      console.error('WS publish hatası:', err);
+      return false;
+    }
+  }, [wsConnected]);
 
-  /** Mesaj gönder */
   const handleMesajGonder = useCallback(async () => {
     if (!mesaj.trim() || !aktifAlici || !kullanici?.id) return;
 
     const nowIso = new Date().toISOString();
-    const gonderilecekMesaj = {
-      senderId: String(kullanici.id),
-      receiverId: String(aktifAlici.kullaniciId),
+    const payload = {
+      senderId: Number(kullanici.id), // server principal doğrulayacak
+      receiverId: Number(aktifAlici.kullaniciId),
       content: mesaj.trim(),
       timestamp: nowIso,
     };
 
-    // Önce WebSocket dene
-    const wsOk = sendMessageWS(gonderilecekMesaj);
+    // Optimistic local msg
+    const localMsg = {
+      ...payload,
+      senderId: String(payload.senderId),
+      receiverId: String(payload.receiverId),
+      id: `tmp-${Date.now()}`,
+    };
 
-    // Optimistic UI: kullanıcı mesajı hemen görsün
-    if (wsOk) {
-      setMesajlar((prev) => [
-        ...prev,
-        {
-          ...gonderilecekMesaj,
-          id: `tmp-${Date.now()}`,
-        },
-      ]);
-      setMesaj('');
-      return;
-    }
+    const key = makeLocalKey(localMsg.senderId, localMsg.receiverId, localMsg.content, localMsg.timestamp);
 
-    // WS yoksa REST fallback
+    // WS dene
+    const wsOk = sendMessageWS(payload);
+
+    // Optimistic UI
+    setMesajlar((prev) => [...prev, localMsg]);
+    localMsgCacheRef.current.add(key);
+    setMesaj('');
+
+    if (wsOk) return; // Sunucudan gerçek mesaj gelirse dupe filtre yakalar
+
+    // REST fallback
     try {
       const res = await authFetch(`${API_BASE}/api/mesajlar`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(gonderilecekMesaj),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       });
       if (res.ok) {
         const saved = normalizeMsg(await res.json());
-        setMesajlar((prev) => [...prev, saved]);
-        setMesaj('');
+        const savedKey = makeLocalKey(saved.senderId, saved.receiverId, saved.content, saved.timestamp);
+        if (!localMsgCacheRef.current.has(savedKey)) {
+          localMsgCacheRef.current.add(savedKey);
+          setMesajlar((prev) => [...prev, saved]);
+        }
       } else {
         console.error('Mesaj gönderilemedi. Status:', res.status);
         alert('Mesaj gönderilemedi.');
@@ -296,15 +359,15 @@ function MainMenu({ kullanici, onLogout }) {
     }
   }, [mesaj, aktifAlici, kullanici, sendMessageWS, authFetch]);
 
-  /** Yeni arkadaş ekle */
+  /* ------------------------------------------------------------------
+   * Arkadaşlık İşlemleri
+   * ---------------------------------------------------------------- */
   const handleYeniArkadasEkle = useCallback(async () => {
     if (!yeniArkadasAdi.trim()) return;
     try {
       const res = await authFetch(`${API_BASE}/api/arkadas`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ kullaniciAdi: yeniArkadasAdi.trim() }),
       });
       if (res.ok) {
@@ -321,30 +384,28 @@ function MainMenu({ kullanici, onLogout }) {
     }
   }, [yeniArkadasAdi, authFetch, loadBekleyenIstekler]);
 
-  /** Arkadaşlık isteği durumunu güncelle */
-  const handleIstegiGuncelle = useCallback(
-    async (istekId, yeniDurum) => {
-      if (!istekId) return;
-      try {
-        const res = await authFetch(`${API_BASE}/api/arkadas/${istekId}/durum?durum=${yeniDurum}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-        });
-        if (res.ok) {
-          setBekleyenIstekler((prev) => prev.filter((i) => i.istekId !== istekId));
-          if (yeniDurum === 1) loadArkadaslar();
-        } else {
-          alert('İstek güncellenemedi.');
-        }
-      } catch (err) {
-        console.error('İstek güncelleme hatası:', err);
-        alert('İstek güncellenirken hata oluştu.');
+  const handleIstegiGuncelle = useCallback(async (istekId, yeniDurum) => {
+    if (!istekId) return;
+    try {
+      const res = await authFetch(`${API_BASE}/api/arkadas/${istekId}/durum?durum=${yeniDurum}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (res.ok) {
+        setBekleyenIstekler((prev) => prev.filter((i) => i.istekId !== istekId));
+        if (yeniDurum === 1) loadArkadaslar();
+      } else {
+        alert('İstek güncellenemedi.');
       }
-    },
-    [authFetch, loadArkadaslar]
-  );
+    } catch (err) {
+      console.error('İstek güncelleme hatası:', err);
+      alert('İstek güncellenirken hata oluştu.');
+    }
+  }, [authFetch, loadArkadaslar]);
 
-  // Arkadaş listesi filtreleme
+  /* ------------------------------------------------------------------
+   * Arkadaş listesi filtreleme
+   * ---------------------------------------------------------------- */
   const filteredArkadaslar = useMemo(() => {
     const term = aramaTerimi.toLowerCase();
     return arkadaslar.filter((a) =>
@@ -352,7 +413,9 @@ function MainMenu({ kullanici, onLogout }) {
     );
   }, [arkadaslar, aramaTerimi]);
 
-  // Profil foto seçimi (ayarlar modal) — preview için dataURL
+  /* ------------------------------------------------------------------
+   * Profil Foto Dosya Seçimi
+   * ---------------------------------------------------------------- */
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -362,96 +425,91 @@ function MainMenu({ kullanici, onLogout }) {
     reader.readAsDataURL(file);
   };
 
-  // Ayarları kaydet
-  const handleAyarKaydet = useCallback(
-    async (e) => {
-      e.preventDefault();
-      if (!kullanici?.id) return;
+  /* ------------------------------------------------------------------
+   * Profil / Ayar Kaydet
+   * ---------------------------------------------------------------- */
+  const handleAyarKaydet = useCallback(async (e) => {
+    e.preventDefault();
+    if (!kullanici?.id) return;
 
-      let profilFotoUploadUrl = kullanici.profilFotoUrl;
+    let profilFotoUploadUrl = kullanici.profilFotoUrl;
 
-      try {
-        // Fotoğraf yükleme
-        if (profilFotoFile) {
-          const formData = new FormData();
-          formData.append('profilFoto', profilFotoFile);
-
-          const resFoto = await authFetch(`${API_BASE}/api/kullanici/${kullanici.id}/uploadProfilFoto`, {
-            method: 'POST',
-            body: formData,
-          });
-
-          if (resFoto.ok) {
-            const data = await resFoto.json(); // { url: "/uploads/..." }
-            profilFotoUploadUrl = data.url;
-            setProfilFotoUrl(`${profilFotoUploadUrl}?v=${Date.now()}`); // cache-bust
-
-            setArkadaslar((prev) =>
-              prev.map((a) => (a.kullaniciId === kullanici.id ? { ...a, profilFotoUrl: profilFotoUploadUrl } : a))
-            );
-          } else {
-            alert('Profil fotoğrafı yüklenemedi.');
-            return;
-          }
-        }
-
-        // Kullanıcı bilgileri güncelle
-        const guncelKullanici = {
-          isim,
-          soyisim,
-          kullaniciAdi,
-          ...(sifre.trim() !== '' && { sifre }),
-          mail,
-          profilFotoUrl: profilFotoUploadUrl,
-        };
-
-        const res = await authFetch(`${API_BASE}/api/kullanici/${kullanici.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(guncelKullanici),
+    try {
+      // Fotoğraf yükle
+      if (profilFotoFile) {
+        const formData = new FormData();
+        formData.append('profilFoto', profilFotoFile);
+        const resFoto = await authFetch(`${API_BASE}/api/kullanici/${kullanici.id}/uploadProfilFoto`, {
+          method: 'POST',
+          body: formData,
         });
+        if (resFoto.ok) {
+          const data = await resFoto.json(); // { url: "/uploads/..." }
+          profilFotoUploadUrl = data.url;
+          setProfilFotoUrl(`${profilFotoUploadUrl}?v=${Date.now()}`); // cache-bust
 
-        if (res.ok) {
-          alert('Profil güncellendi.');
-          setModalAcik(false);
-          setSifre('');
+          // Sidebar'daki arkadaş listesinde kendi kaydını güncelle (isteğe bağlı)
+          setArkadaslar((prev) =>
+            prev.map((a) => (a.kullaniciId === kullanici.id ? { ...a, profilFotoUrl: profilFotoUploadUrl } : a))
+          );
         } else {
-          const hata = await res.text();
-          console.error('Profil güncelleme hatası:', hata);
-          alert('Profil güncellenemedi.');
+          alert('Profil fotoğrafı yüklenemedi.');
+          return;
         }
-      } catch (err) {
-        console.error('Profil güncelleme sırasında hata:', err);
-        alert('Bir hata oluştu.');
       }
-    },
-    [profilFotoFile, kullanici, isim, soyisim, kullaniciAdi, sifre, mail, authFetch]
-  );
 
-  /** Resim hata fallback */
+      // Kullanıcı bilgileri güncelle
+      const guncelKullanici = {
+        isim,
+        soyisim,
+        kullaniciAdi,
+        ...(sifre.trim() !== '' && { sifre }),
+        mail,
+        profilFotoUrl: profilFotoUploadUrl,
+      };
+
+      const res = await authFetch(`${API_BASE}/api/kullanici/${kullanici.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(guncelKullanici),
+      });
+
+      if (res.ok) {
+        alert('Profil güncellendi.');
+        setModalAcik(false);
+        setSifre('');
+      } else {
+        const hata = await res.text();
+        console.error('Profil güncelleme hatası:', hata);
+        alert('Profil güncellenemedi.');
+      }
+    } catch (err) {
+      console.error('Profil güncelleme sırasında hata:', err);
+      alert('Bir hata oluştu.');
+    }
+  }, [profilFotoFile, kullanici, isim, soyisim, kullaniciAdi, sifre, mail, authFetch]);
+
+  /* ------------------------------------------------------------------
+   * Image fallback
+   * ---------------------------------------------------------------- */
   const handleImageError = (e) => {
     if (e.currentTarget.src !== DEFAULT_AVATAR) {
       e.currentTarget.src = DEFAULT_AVATAR;
     }
   };
 
-  /** Zaman formatla (HH:mm) */
-  const formatZaman = (iso) => {
-    if (!iso) return '';
-    const dt = new Date(iso);
-    if (Number.isNaN(dt.getTime())) return '';
-    return dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
-
-  const myIdStr = String(kullanici?.id ?? '');
-
+  /* ------------------------------------------------------------------
+   * Render
+   * ---------------------------------------------------------------- */
   return (
     <div className={styles.mainContainer}>
+      {/* -------------------------------------------------------------- */}
       {/* SOL SİDEBAR */}
+      {/* -------------------------------------------------------------- */}
       <div className={styles.sidebar}>
         <input
           type="text"
-          placeholder="Ara..."
+          placeholder="  Ara..."
           className={styles.searchInput1}
           value={aramaTerimi}
           onChange={(e) => setAramaTerimi(e.target.value)}
@@ -521,7 +579,9 @@ function MainMenu({ kullanici, onLogout }) {
         </div>
       </div>
 
+      {/* -------------------------------------------------------------- */}
       {/* SAĞ CHAT ALANI */}
+      {/* -------------------------------------------------------------- */}
       <div className={styles.chatContainer}>
         <div className={styles.chatHeader}>
           {aktifAlici && (
@@ -581,10 +641,17 @@ function MainMenu({ kullanici, onLogout }) {
         )}
       </div>
 
-      {/* Ayarlar modal */}
+      {/* -------------------------------------------------------------- */}
+      {/* Ayarlar Modal */}
+      {/* -------------------------------------------------------------- */}
       {modalAcik && (
         <div className={styles.modalOverlay} onClick={() => setModalAcik(false)}>
-          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+          <div
+            className={styles.modalContent}
+            onClick={(e) => e.stopPropagation()}
+            /* Inline fallback: CSS override edilmezse bile taşma olmasın */
+            style={{ maxWidth: '450px', maxHeight: '90vh', overflowY: 'auto' }}
+          >
             <h2>Ayarlar</h2>
             <form className={styles.settingsForm} onSubmit={handleAyarKaydet}>
               <div className={styles.profilePhotoContainer}>
@@ -606,20 +673,20 @@ function MainMenu({ kullanici, onLogout }) {
                 />
               </div>
 
-              <label>İsim</label>
-              <input value={isim} onChange={(e) => setIsim(e.target.value)} />
+              <label htmlFor="ayar-isim">İsim</label>
+              <input id="ayar-isim" value={isim} onChange={(e) => setIsim(e.target.value)} />
 
-              <label>Soyisim</label>
-              <input value={soyisim} onChange={(e) => setSoyisim(e.target.value)} />
+              <label htmlFor="ayar-soyisim">Soyisim</label>
+              <input id="ayar-soyisim" value={soyisim} onChange={(e) => setSoyisim(e.target.value)} />
 
-              <label>Kullanıcı Adı</label>
-              <input value={kullaniciAdi} onChange={(e) => setKullaniciAdi(e.target.value)} />
+              <label htmlFor="ayar-kadi">Kullanıcı Adı</label>
+              <input id="ayar-kadi" value={kullaniciAdi} onChange={(e) => setKullaniciAdi(e.target.value)} />
 
-              <label>Şifre (boş bırakılırsa değişmez)</label>
-              <input type="password" value={sifre} onChange={(e) => setSifre(e.target.value)} />
+              <label htmlFor="ayar-sifre">Şifre (boş bırakılırsa değişmez)</label>
+              <input id="ayar-sifre" type="password" value={sifre} onChange={(e) => setSifre(e.target.value)} />
 
-              <label>Mail</label>
-              <input value={mail} onChange={(e) => setMail(e.target.value)} />
+              <label htmlFor="ayar-mail">Mail</label>
+              <input id="ayar-mail" value={mail} onChange={(e) => setMail(e.target.value)} />
 
               <div className={styles.modalButtons}>
                 <button type="submit" className={styles.saveButton}>
@@ -634,24 +701,34 @@ function MainMenu({ kullanici, onLogout }) {
         </div>
       )}
 
-      {/* Bildirim modal */}
+      {/* -------------------------------------------------------------- */}
+      {/* Bildirim Modal */}
+      {/* -------------------------------------------------------------- */}
       {bildirimModalAcik && (
         <div className={styles.modalOverlay} onClick={() => setBildirimModalAcik(false)}>
-          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+          <div
+            className={styles.modalContent}
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '420px', maxHeight: '80vh', overflowY: 'auto' }}
+          >
             <h2>Bekleyen Arkadaşlık İstekleri</h2>
             {bekleyenIstekler.length === 0 && <p>Yeni arkadaşlık isteğiniz yok.</p>}
             <ul className={styles.requestList}>
               {bekleyenIstekler.map((istek) => (
                 <li key={istek.istekId} className={styles.requestItem}>
-                  <span>{istek.gonderenAdi ?? istek.kullaniciAdi}</span>
+                  <span>
+                    {istek.gonderenAdi ?? istek.kullaniciAdi ?? istek.gonderenKullaniciAdi ?? 'Bilinmiyor'}
+                  </span>
                   <div>
                     <button
+                      type="button"
                       className={styles.acceptButton}
                       onClick={() => handleIstegiGuncelle(istek.istekId, 1)}
                     >
                       Kabul Et
                     </button>
                     <button
+                      type="button"
                       className={styles.rejectButton}
                       onClick={() => handleIstegiGuncelle(istek.istekId, 2)}
                     >
