@@ -18,7 +18,7 @@ input {
 .sidebar {
   display: flex;
   flex-direction: column;
-  width: 280px;
+  width: 350px;
   background-color: #202225;
   padding: 10px;
   box-sizing: border-box;
@@ -131,6 +131,7 @@ input {
 
 .username {
   font-weight: bold;
+  font-size: 13px;
 }
 
 .footerButtons {
@@ -231,16 +232,6 @@ input {
   border-radius: 8px;
   word-wrap: break-word;
   animation: fadeIn 0.2s ease;
-}
-
-.fromMe {
-  align-self: flex-end;
-  background-color: #5865f2;
-}
-
-.fromThem {
-  align-self: flex-start;
-  background-color: #4f545c;
 }
 
 .messageTime {
@@ -451,6 +442,64 @@ input {
 .closeButton:hover {
   background-color: #4752c4;
 }
+
+.userBadge {
+  margin-left: 4px;
+  background: #ff3b30; /* kırmızı */
+  color: #fff;
+  border-radius: 10px;
+  font-size: 11px;
+  padding: 0 6px;
+  line-height: 16px;
+  min-width: 16px;
+  display: inline-block;
+  text-align: center;
+}
+
+.messageRow {
+  display: flex;
+  align-items: flex-start;
+  margin: 8px 0;
+}
+
+.messageAvatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-right: 10px;
+}
+
+.messageBubble {
+  background-color: #40444b;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 12px;
+  max-width: 70%;
+  display: flex;
+  flex-direction: column;
+}
+
+.messageText {
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.messageTime {
+  font-size: 12px;
+  color: #aaa;
+  align-self: flex-end;
+  margin-top: 4px;
+}
+
+.senderName {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ddd;
+  margin-bottom: 4px;
+}
+
+
 
 /* Animations */
 @keyframes fadeIn {

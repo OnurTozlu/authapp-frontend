@@ -31,16 +31,22 @@ function buildImageUrl(path) {
 
 /** Mesaj objesini backend/legacy alan adlarına göre normalize et. */
 function normalizeMsg(raw) {
-  console.log('normalizeMsg input:', raw);
+  // console.log('normalizeMsg input:', raw);
   return {
     id: raw.id ?? raw.mesajId ?? 'no-id',
-    senderId: raw.senderId ?? raw.gondericiId ?? raw.gonderenId ?? raw.gonderenID ?? raw.gonderen ?? 'no-sender',
-    receiverId: raw.receiverId ?? raw.aliciId ?? raw.aliciID ?? raw.alici ?? 'no-receiver',
+    senderId: String(
+      raw.senderId ?? raw.gondericiId ?? raw.gonderenId ?? raw.gonderenID ?? raw.gonderen ?? 'no-sender'
+    ),
+    receiverId: String(
+      raw.receiverId ?? raw.aliciId ?? raw.aliciID ?? raw.alici ?? 'no-receiver'
+    ),
     content: raw.content ?? raw.icerik ?? '',
     timestamp: raw.timestamp ?? raw.zaman ?? raw.createdAt ?? null,
   };
 }
 
+/** Yardımcı: friend ID'lerini karşılaştırırken string'e çevir. */
+const toStrId = (v) => String(v ?? '');
 
 function MainMenu({ kullanici, onLogout }) {
   const [arkadaslar, setArkadaslar] = useState([]);
@@ -70,6 +76,41 @@ function MainMenu({ kullanici, onLogout }) {
 
   const bildirimSayisi = bekleyenIstekler.length;
 
+  /**
+   * --- YENİ: aktif alıcıyı seçince unreadCount sıfırlamak için helper ---
+   */
+  const clearUnreadFor = useCallback((friendId) => {
+    setArkadaslar((prev) =>
+      prev.map((a) =>
+        toStrId(a.kullaniciId) === toStrId(friendId)
+          ? { ...a, unreadCount: 0 }
+          : a
+      )
+    );
+  }, []);
+
+  /**
+   * --- YENİ: Bir arkadaş için unread sayısını artır ve liste başına taşı ---
+   * incrementUnread = true -> unreadCount++
+   * incrementUnread = false -> unreadCount değişmez (örn. aktif görüşmede iken gönderdiğimiz mesajlar)
+   */
+  const bumpFriendToTop = useCallback((friendId, { incrementUnread = true, timestamp = Date.now() } = {}) => {
+    setArkadaslar((prev) => {
+      const idx = prev.findIndex((a) => toStrId(a.kullaniciId) === toStrId(friendId));
+      if (idx === -1) return prev; // bilinmiyor
+      const friend = { ...prev[idx] };
+      friend.lastActivity = timestamp;
+      if (incrementUnread) {
+        friend.unreadCount = (friend.unreadCount || 0) + 1;
+      }
+      // Listeden çıkarıp başa ekle
+      const newArr = [...prev];
+      newArr.splice(idx, 1);
+      newArr.unshift(friend);
+      return newArr;
+    });
+  }, []);
+
   /** JWT header helper */
   const getAuthHeaders = useCallback(() => {
     const token = localStorage.getItem('token');
@@ -95,7 +136,18 @@ function MainMenu({ kullanici, onLogout }) {
       const res = await authFetch(`${API_BASE}/api/arkadas/liste?kullaniciId=${kullanici.id}`);
       if (res.ok) {
         const data = await res.json();
-        setArkadaslar(data);
+        // Önceki unread ve lastActivity değerlerini koru
+        setArkadaslar((prev) => {
+          const prevMap = new Map(prev.map((p) => [toStrId(p.kullaniciId), p]));
+          return data.map((a) => {
+            const old = prevMap.get(toStrId(a.kullaniciId));
+            return {
+              ...a,
+              unreadCount: old?.unreadCount ?? 0,
+              lastActivity: old?.lastActivity ?? 0,
+            };
+          });
+        });
       } else {
         console.error('Arkadaş listesi alınamadı. Status:', res.status);
       }
@@ -122,25 +174,25 @@ function MainMenu({ kullanici, onLogout }) {
 
   /** Mesajları yükle (aktif alıcıya göre) - REST fallback */
   const loadMesajlar = useCallback(
-  async (aliciId) => {
-    if (!aliciId) {
-      setMesajlar([]);
-      return;
-    }
-    try {
-      const res = await authFetch(`${API_BASE}/api/mesajlar?aliciId=${aliciId}`);
-      if (res.ok) {
-        const data = await res.json();
-        setMesajlar(Array.isArray(data) ? data.map(normalizeMsg) : []);
-      } else {
+    async (aliciId) => {
+      if (!aliciId) {
+        setMesajlar([]);
+        return;
+      }
+      try {
+        const res = await authFetch(`${API_BASE}/api/mesajlar?aliciId=${aliciId}`);
+        if (res.ok) {
+          const data = await res.json();
+          setMesajlar(Array.isArray(data) ? data.map(normalizeMsg) : []);
+        } else {
+          setMesajlar([]);
+        }
+      } catch (err) {
         setMesajlar([]);
       }
-    } catch (err) {
-      setMesajlar([]);
-    }
-  },
-  [authFetch]
-);
+    },
+    [authFetch]
+  );
 
   // Component mount & kullanıcı değişince
   useEffect(() => {
@@ -148,14 +200,15 @@ function MainMenu({ kullanici, onLogout }) {
     loadBekleyenIstekler();
   }, [kullanici, loadArkadaslar, loadBekleyenIstekler]);
 
-  // Aktif alıcı değişince mesajlar
+  // Aktif alıcı değişince mesajlar yükle ve unread sıfırla
   useEffect(() => {
     if (aktifAlici) {
       loadMesajlar(aktifAlici.kullaniciId);
+      clearUnreadFor(aktifAlici.kullaniciId);
     } else {
       setMesajlar([]);
     }
-  }, [aktifAlici, loadMesajlar]);
+  }, [aktifAlici, loadMesajlar, clearUnreadFor]);
 
   // Mesajlar değişince scroll
   useEffect(() => {
@@ -167,6 +220,7 @@ function MainMenu({ kullanici, onLogout }) {
     if (!kullanici?.id) return; // login yoksa bağlanma
 
     const token = localStorage.getItem('token');
+    const myIdStr = toStrId(kullanici.id);
 
     const client = new Client({
       // SockJS factory
@@ -186,17 +240,29 @@ function MainMenu({ kullanici, onLogout }) {
           const body = JSON.parse(frame.body);
           const msg = normalizeMsg(body);
 
-          // Eğer aktif sohbet bu kullanıcıyla ise ekle
+          // Mesajı aktif sohbete ekleyelim mi?
           setMesajlar((prev) => {
-            const aliciIdStr = aktifAlici ? String(aktifAlici.kullaniciId) : null;
-            const myIdStr = String(kullanici.id);
+            const aliciIdStr = aktifAlici ? toStrId(aktifAlici.kullaniciId) : null;
             const isForActive =
               aliciIdStr &&
-              (msg.senderId === aliciIdStr || msg.receiverId === aliciIdStr ||
+              (msg.senderId === aliciIdStr ||
+                msg.receiverId === aliciIdStr ||
                 // bazı backendler receiver/gonderen swap yapabilir; kontrol geniş
                 (msg.senderId === myIdStr && msg.receiverId === aliciIdStr));
-            return isForActive ? [...prev, msg] : prev;
+            if (isForActive) {
+              return [...prev, msg];
+            }
+            return prev;
           });
+
+          // --- Arkadaş sıralama & unread güncelleme ---
+          const otherPartyId = msg.senderId === myIdStr ? msg.receiverId : msg.senderId;
+          const isActive = aktifAlici && toStrId(aktifAlici.kullaniciId) === toStrId(otherPartyId);
+          bumpFriendToTop(otherPartyId, { incrementUnread: !isActive, timestamp: Date.now() });
+          if (isActive) {
+            // aktif görüşmede ise unread sıfırlandığı için emin olmak adına:
+            clearUnreadFor(otherPartyId);
+          }
         } catch (e) {
           console.error('WS mesaj parse hatası:', e);
         }
@@ -224,7 +290,8 @@ function MainMenu({ kullanici, onLogout }) {
       stompClientRef.current = null;
       setWsConnected(false);
     };
-  }, [kullanici?.id, aktifAlici]); // aktifAlici bağımlılığı: farklı user context'te abonelik filtresini güncel tutmak için state set'te kontrol ediyoruz
+    // aktifAlici bağımlılığı: farklı user context'te abonelik filtresini güncel tutmak için state set'te kontrol ediyoruz
+  }, [kullanici?.id, aktifAlici, bumpFriendToTop, clearUnreadFor]);
 
   /** WebSocket üzerinden mesaj gönder (varsa), yoksa REST fallback */
   const sendMessageWS = useCallback(
@@ -246,8 +313,7 @@ function MainMenu({ kullanici, onLogout }) {
   const handleMesajGonder = useCallback(async () => {
     if (!mesaj.trim() || !aktifAlici || !kullanici?.id) return;
 
-  console.log('Gönderici ID:', kullanici.id, 'Alıcı ID:', aktifAlici?.kullaniciId);
-
+    console.log('Gönderici ID:', kullanici.id, 'Alıcı ID:', aktifAlici?.kullaniciId);
 
     const nowIso = new Date().toISOString();
     const gonderilecekMesaj = {
@@ -258,7 +324,6 @@ function MainMenu({ kullanici, onLogout }) {
     };
 
     console.log('Gönderilen mesaj payload:', gonderilecekMesaj);
-
 
     // Önce WebSocket dene
     const wsOk = sendMessageWS(gonderilecekMesaj);
@@ -273,6 +338,8 @@ function MainMenu({ kullanici, onLogout }) {
         },
       ]);
       setMesaj('');
+      // Gönderdiğimiz kişi liste başına gelsin; unread artmasın.
+      bumpFriendToTop(aktifAlici.kullaniciId, { incrementUnread: false, timestamp: Date.now() });
       return;
     }
 
@@ -289,6 +356,7 @@ function MainMenu({ kullanici, onLogout }) {
         const saved = normalizeMsg(await res.json());
         setMesajlar((prev) => [...prev, saved]);
         setMesaj('');
+        bumpFriendToTop(aktifAlici.kullaniciId, { incrementUnread: false, timestamp: Date.now() });
       } else {
         console.error('Mesaj gönderilemedi. Status:', res.status);
         alert('Mesaj gönderilemedi.');
@@ -297,7 +365,7 @@ function MainMenu({ kullanici, onLogout }) {
       console.error('Mesaj gönderme hatası:', err);
       alert('Mesaj gönderilemedi, hata oluştu.');
     }
-  }, [mesaj, aktifAlici, kullanici, sendMessageWS, authFetch]);
+  }, [mesaj, aktifAlici, kullanici, sendMessageWS, authFetch, bumpFriendToTop]);
 
   /** Yeni arkadaş ekle */
   const handleYeniArkadasEkle = useCallback(async () => {
@@ -347,7 +415,7 @@ function MainMenu({ kullanici, onLogout }) {
     [authFetch, loadArkadaslar]
   );
 
-  // Arkadaş listesi filtreleme
+  // Arkadaş listesi filtreleme (sıra korunur)
   const filteredArkadaslar = useMemo(() => {
     const term = aramaTerimi.toLowerCase();
     return arkadaslar.filter((a) =>
@@ -446,7 +514,19 @@ function MainMenu({ kullanici, onLogout }) {
     return dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  const myIdStr = String(kullanici?.id ?? '');
+  const myIdStr = toStrId(kullanici?.id ?? '');
+
+  /** Arkadaş seçimi: unread sıfırla */
+  const handleSelectAlici = (arkadas) => {
+    setAktifAlici(arkadas);
+    clearUnreadFor(arkadas.kullaniciId);
+  };
+
+  /** Küçük badge formatlayıcı (99+ gibi) */
+  const formatBadge = (n) => {
+    if (!n) return null;
+    return n > 99 ? '99+' : n;
+  };
 
   return (
     <div className={styles.mainContainer}>
@@ -478,7 +558,7 @@ function MainMenu({ kullanici, onLogout }) {
             <button
               key={arkadas.kullaniciId}
               className={`${styles.userButton} ${aktifAlici?.kullaniciId === arkadas.kullaniciId ? styles.selected : ''}`}
-              onClick={() => setAktifAlici(arkadas)}
+              onClick={() => handleSelectAlici(arkadas)}
             >
               <img
                 src={buildImageUrl(arkadas.profilFotoUrl)}
@@ -486,7 +566,12 @@ function MainMenu({ kullanici, onLogout }) {
                 className={styles.userAvatar}
                 onError={handleImageError}
               />
-              {arkadas.isim && arkadas.soyisim ? `${arkadas.isim} ${arkadas.soyisim}` : arkadas.kullaniciAdi}
+              <span className={styles.userLabel}>
+                {arkadas.isim && arkadas.soyisim ? `${arkadas.isim} ${arkadas.soyisim}` : arkadas.kullaniciAdi}
+              </span>
+              {arkadas.unreadCount > 0 && (
+                <span className={styles.userBadge}>{formatBadge(arkadas.unreadCount)}</span>
+              )}
             </button>
           ))}
         </div>
@@ -552,14 +637,30 @@ function MainMenu({ kullanici, onLogout }) {
             {mesajlar.map((msg, index) => {
               const fromMe = msg.senderId === myIdStr;
               return (
-                <div
-                  key={msg.id ?? index}
-                  className={`${styles.message} ${fromMe ? styles.fromMe : styles.fromThem}`}
-                >
-                  <div>{msg.content}</div>
-                  <div className={styles.messageTime}>{formatZaman(msg.timestamp)}</div>
+                <div key={msg.id ?? index} className={styles.messageRow}>
+                  <img
+                    src={buildImageUrl(
+                      msg.senderId === myIdStr
+                        ? kullanici?.profilFotoUrl
+                        : aktifAlici?.profilFotoUrl
+                    )}
+                    alt="Profil"
+                    className={styles.messageAvatar}
+                    onError={handleImageError}
+                  />
+                  <div className={styles.messageBubble}>
+                    <div className={styles.senderName}>
+                      {msg.senderId === myIdStr
+                        ? `${kullanici?.isim} ${kullanici?.soyisim}`
+                        : `${aktifAlici?.isim} ${aktifAlici?.soyisim}`}
+                    </div>
+                    <div className={styles.messageText}>{msg.content}</div>
+                    <div className={styles.messageTime}>{formatZaman(msg.timestamp)}</div>
+                  </div>
                 </div>
+
               );
+
             })}
             <div ref={messagesEndRef} />
           </div>
@@ -675,4 +776,3 @@ function MainMenu({ kullanici, onLogout }) {
 }
 
 export default MainMenu;
- 
