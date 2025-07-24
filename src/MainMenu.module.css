@@ -91,6 +91,7 @@ input {
   cursor: pointer;
   border-radius: 5px;
   transition: background-color 0.2s, transform 0.1s;
+  font-size: 15px;
 }
 
 .userButton:hover {
@@ -99,8 +100,8 @@ input {
 }
 
 .userAvatar {
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
 }
 

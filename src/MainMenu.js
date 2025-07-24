@@ -739,7 +739,7 @@ console.log('msg.senderId:', msg.senderId, 'msg.receiverId:', msg.receiverId);
               <label>Şifre (boş bırakılırsa değişmez)</label>
               <input type="password" value={sifre} onChange={(e) => setSifre(e.target.value)} />
 
-              <label>Mail</label>
+              <label>E-Mail</label>
               <input value={mail} onChange={(e) => setMail(e.target.value)} />
 
               <div className={styles.modalButtons}>
