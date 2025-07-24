@@ -651,20 +651,22 @@ console.log('msg.senderId:', msg.senderId, 'msg.receiverId:', msg.receiverId);
           <div key={msg.id ?? index} className={styles.messageRow}>
             <img
               src={buildImageUrl(
-                Number(myIdStr) === msg.senderId
-                  ? kullanici?.profilFotoUrl
-                  : aktifAlici?.profilFotoUrl
+                String(msg.senderId) === String(myIdStr)
+                  ? kullanici?.profilFotoUrl    // Senin profil fotoğrafın
+                  : aktifAlici?.profilFotoUrl   // Karşı tarafın profil fotoğrafı
               )}
               alt="Profil"
               className={styles.messageAvatar}
               onError={handleImageError}
             />
+
             <div className={styles.messageBubble}>
-            <div className={styles.senderName}>
-              {String(msg.senderId) === myIdStr
-                ? `${kullanici?.isim || "Ben"} ${kullanici?.soyisim || ""}`
-                : `${aktifAlici?.isim || aktifAlici?.kullaniciAdi || "Karşı"} ${aktifAlici?.soyisim || ""}`}
-            </div>
+              <div className={styles.senderName}>
+                {String(msg.senderId) === myIdStr
+                  ? `${kullanici?.kullaniciAdi || "Ben"}`
+                  : `${aktifAlici?.kullaniciAdi || "Karşı"}`}
+              </div>
+
 
               <div className={styles.messageText}>{msg.content}</div>
               <div className={styles.messageTime}>{formatZaman(msg.timestamp)}</div>
