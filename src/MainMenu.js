@@ -650,7 +650,10 @@ function MainMenu({ kullanici, onLogout }) {
                   />
                   <div className={styles.messageBubble}>
                     <div className={styles.senderName}>
-                      {msg.senderId === myIdStr
+                      {/* Backend'den gelen isim soyisim kullanılıyor */}
+                      {msg.senderIsim && msg.senderSoyisim
+                        ? `${msg.senderIsim} ${msg.senderSoyisim}`
+                        : msg.senderId === myIdStr
                         ? `${kullanici?.isim} ${kullanici?.soyisim}`
                         : `${aktifAlici?.isim} ${aktifAlici?.soyisim}`}
                     </div>
@@ -658,8 +661,9 @@ function MainMenu({ kullanici, onLogout }) {
                     <div className={styles.messageTime}>{formatZaman(msg.timestamp)}</div>
                   </div>
                 </div>
-
               );
+
+
 
             })}
             <div ref={messagesEndRef} />
