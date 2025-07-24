@@ -517,10 +517,15 @@ function MainMenu({ kullanici, onLogout }) {
   const myIdStr = toStrId(kullanici?.id ?? '');
 
   /** Arkadaş seçimi: unread sıfırla */
-  const handleSelectAlici = (arkadas) => {
-    setAktifAlici(arkadas);
-    clearUnreadFor(arkadas.kullaniciId);
-  };
+const handleSelectAlici = (arkadas) => {
+  setAktifAlici({
+    ...arkadas,
+    isim: arkadas.isim ?? '',
+    soyisim: arkadas.soyisim ?? '',
+  });
+  clearUnreadFor(arkadas.kullaniciId);
+};
+
 
   /** Küçük badge formatlayıcı (99+ gibi) */
   const formatBadge = (n) => {
@@ -635,33 +640,43 @@ function MainMenu({ kullanici, onLogout }) {
         {aktifAlici ? (
           <div className={styles.messages}>
             {mesajlar.map((msg, index) => {
-              const fromMe = msg.senderId === myIdStr;
-              return (
-                <div key={msg.id ?? index} className={styles.messageRow}>
-                  <img
-                    src={buildImageUrl(
-                      msg.senderId === myIdStr
-                        ? kullanici?.profilFotoUrl
-                        : aktifAlici?.profilFotoUrl
-                    )}
-                    alt="Profil"
-                    className={styles.messageAvatar}
-                    onError={handleImageError}
-                  />
-                  <div className={styles.messageBubble}>
-                    <div className={styles.senderName}>
-                      {/* Backend'den gelen isim soyisim kullanılıyor */}
-                      {msg.senderIsim && msg.senderSoyisim
-                        ? `${msg.senderIsim} ${msg.senderSoyisim}`
-                        : msg.senderId === myIdStr
-                        ? `${kullanici?.isim} ${kullanici?.soyisim}`
-                        : `${aktifAlici?.isim} ${aktifAlici?.soyisim}`}
-                    </div>
-                    <div className={styles.messageText}>{msg.content}</div>
-                    <div className={styles.messageTime}>{formatZaman(msg.timestamp)}</div>
-                  </div>
-                </div>
-              );
+        const fromMe = msg.senderId === myIdStr;
+        const fromThem = msg.receiverId === myIdStr;
+        console.log("Mesaj objesi:", msg);
+        console.log('aktifAlici:', aktifAlici);
+console.log('msg.senderId:', msg.senderId, 'msg.receiverId:', msg.receiverId);
+
+
+        return (
+          <div key={msg.id ?? index} className={styles.messageRow}>
+            <img
+              src={buildImageUrl(
+                Number(myIdStr) === msg.senderId
+                  ? kullanici?.profilFotoUrl
+                  : aktifAlici?.profilFotoUrl
+              )}
+              alt="Profil"
+              className={styles.messageAvatar}
+              onError={handleImageError}
+            />
+            <div className={styles.messageBubble}>
+            <div className={styles.senderName}>
+              {String(msg.senderId) === myIdStr
+                ? `${kullanici?.isim || "Ben"} ${kullanici?.soyisim || ""}`
+                : `${aktifAlici?.isim || aktifAlici?.kullaniciAdi || "Karşı"} ${aktifAlici?.soyisim || ""}`}
+            </div>
+
+
+
+
+
+              <div className={styles.messageText}>{msg.content}</div>
+              <div className={styles.messageTime}>{formatZaman(msg.timestamp)}</div>
+            </div>
+          </div>
+        );
+
+
 
 
 
