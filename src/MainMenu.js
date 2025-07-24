@@ -666,10 +666,6 @@ console.log('msg.senderId:', msg.senderId, 'msg.receiverId:', msg.receiverId);
                 : `${aktifAlici?.isim || aktifAlici?.kullaniciAdi || "Karşı"} ${aktifAlici?.soyisim || ""}`}
             </div>
 
-
-
-
-
               <div className={styles.messageText}>{msg.content}</div>
               <div className={styles.messageTime}>{formatZaman(msg.timestamp)}</div>
             </div>
