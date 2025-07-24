@@ -539,7 +539,7 @@ const handleSelectAlici = (arkadas) => {
       <div className={styles.sidebar}>
         <input
           type="text"
-          placeholder="Ara..."
+          placeholder="   Ara..."
           className={styles.searchInput1}
           value={aramaTerimi}
           onChange={(e) => setAramaTerimi(e.target.value)}
