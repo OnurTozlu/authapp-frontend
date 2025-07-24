@@ -760,28 +760,33 @@ console.log('msg.senderId:', msg.senderId, 'msg.receiverId:', msg.receiverId);
         <div className={styles.modalOverlay} onClick={() => setBildirimModalAcik(false)}>
           <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
             <h2>Bekleyen Arkadaşlık İstekleri</h2>
-            {bekleyenIstekler.length === 0 && <p>Yeni arkadaşlık isteğiniz yok.</p>}
-            <ul className={styles.requestList}>
-              {bekleyenIstekler.map((istek) => (
-                <li key={istek.istekId} className={styles.requestItem}>
-                  <span>{istek.gonderenAdi ?? istek.kullaniciAdi}</span>
-                  <div>
-                    <button
-                      className={styles.acceptButton}
-                      onClick={() => handleIstegiGuncelle(istek.istekId, 1)}
-                    >
-                      Kabul Et
-                    </button>
-                    <button
-                      className={styles.rejectButton}
-                      onClick={() => handleIstegiGuncelle(istek.istekId, 2)}
-                    >
-                      Reddet
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
+
+            {bekleyenIstekler.length === 0 ? (
+              <p>Yeni arkadaşlık isteğiniz yok.</p>
+            ) : (
+              <ul className={styles.requestList}>
+                {bekleyenIstekler.map((istek) => (
+                  <li key={istek.istekId} className={styles.requestItem}>
+                    <span>{istek.gonderenIsimSoyisim ?? istek.gonderenKullaniciAdi}</span>
+                    <div>
+                      <button
+                        className={styles.acceptButton}
+                        onClick={() => handleIstegiGuncelle(istek.istekId, 1)}
+                      >
+                        Kabul Et
+                      </button>
+                      <button
+                        className={styles.rejectButton}
+                        onClick={() => handleIstegiGuncelle(istek.istekId, 2)}
+                      >
+                        Reddet
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+
             <button className={styles.closeButton} onClick={() => setBildirimModalAcik(false)}>
               Kapat
             </button>
